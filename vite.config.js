@@ -67,6 +67,10 @@ export default defineConfig({
         'offscreen': resolve(__dirname, 'src/offscreen/offscreen.js'),
         'workers/whisper-worker': resolve(__dirname, 'src/workers/whisper-worker.js'),
         'content/content': resolve(__dirname, 'src/content/content.js'),
+        'content/content-debug': resolve(__dirname, 'src/content/content-debug.js'),
+        'content/content-selector-discovery': resolve(__dirname, 'src/content/content-selector-discovery.js'),
+        'content/content-whatsapp-test': resolve(__dirname, 'src/content/content-whatsapp-test.js'),
+        'content/content-whatsapp-simple': resolve(__dirname, 'src/content/content-whatsapp-simple.js'),
         'popup/popup': resolve(__dirname, 'src/popup/popup-test.jsx'),
         'options/options': resolve(__dirname, 'src/options/options-test.jsx'),
         'ui/main': resolve(__dirname, 'src/ui/index.jsx')

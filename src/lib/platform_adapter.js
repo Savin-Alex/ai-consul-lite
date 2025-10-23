@@ -29,22 +29,43 @@ export function getAdapter(hostname) {
   }
 }
 
-// WhatsApp Web Adapter
+// WhatsApp Web Adapter - Updated for current WhatsApp Web structure
 const whatsappAdapter = {
   name: 'WhatsApp',
-  // Targets: <div data-testid="conversation-compose-box-input" contenteditable="true" ...>
-  inputSelector: '[data-testid="conversation-compose-box-input"]',
-  // Targets: <div data-testid="conversation-panel-messages"> <div data-testid="msg-container">
-  messageSelector: '[data-testid="conversation-panel-messages"] [data-testid="msg-container"]',
+  // Updated: Targets the lexical-rich-text-input div for message input (exclude search field)
+  inputSelector: '.lexical-rich-text-input:not([aria-label*="Search"])',
+  // Updated: Use a broader selector for message elements since specific containers weren't found
+  messageSelector: 'div[class*="x1c4vz4f"]', // Based on discovered message div classes
   
   getMessageText(node) {
-    const textElement = node.querySelector('[data-testid="msg-text"]')
-    return textElement ? textElement.textContent.trim() : ''
+    // Try multiple approaches to get message text
+    const textElement = node.querySelector('[data-testid="msg-text"]') ||
+                       node.querySelector('.message-text') ||
+                       node.querySelector('[class*="text"]')
+    
+    if (textElement) {
+      return textElement.textContent.trim()
+    }
+    
+    // Fallback: get text content directly from the node
+    const text = node.textContent?.trim()
+    // Filter out very short or very long text (likely not messages)
+    if (text && text.length > 5 && text.length < 1000) {
+      return text
+    }
+    
+    return ''
   },
   
   getMessageRole(node) {
-    // Check if message is from user (has data-testid="msg-out")
-    const isOutgoing = node.querySelector('[data-testid="msg-out"]')
+    // Check multiple patterns for outgoing messages
+    const isOutgoing = node.querySelector('[data-testid="msg-out"]') ||
+                       node.classList.contains('message-out') ||
+                       node.classList.contains('sent') ||
+                       node.classList.contains('outgoing') ||
+                       node.querySelector('[class*="out"]') ||
+                       node.querySelector('[class*="sent"]')
+    
     return isOutgoing ? 'user' : 'assistant'
   },
   
@@ -52,9 +73,20 @@ const whatsappAdapter = {
     const input = document.querySelector(this.inputSelector)
     if (input) {
       input.focus()
+      
+      // For lexical editor, we need to simulate typing
       input.textContent = text
+      
+      // Dispatch multiple events to ensure WhatsApp detects the change
       input.dispatchEvent(new Event('input', { bubbles: true }))
       input.dispatchEvent(new Event('change', { bubbles: true }))
+      input.dispatchEvent(new Event('keyup', { bubbles: true }))
+      
+      // Also try setting the innerHTML for lexical editor
+      if (input.classList.contains('lexical-rich-text-input')) {
+        input.innerHTML = `<p>${text}</p>`
+        input.dispatchEvent(new Event('input', { bubbles: true }))
+      }
     }
   }
 }
