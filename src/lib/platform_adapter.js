@@ -32,8 +32,8 @@ export function getAdapter(hostname) {
 // WhatsApp Web Adapter - Updated for current WhatsApp Web structure
 const whatsappAdapter = {
   name: 'WhatsApp',
-  // Updated: Targets the lexical-rich-text-input div for message input (exclude search field)
-  inputSelector: '.lexical-rich-text-input:not([aria-label*="Search"])',
+  // Updated: Targets the actual contenteditable input field inside the lexical container
+  inputSelector: '.lexical-rich-text-input div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"])',
   // Updated: Use a broader selector for message elements since specific containers weren't found
   messageSelector: 'div[class*="x1c4vz4f"]', // Based on discovered message div classes
   
