@@ -1,10 +1,226 @@
 /**
- * Content Script for AI Consul Lite
+ * Simplified Content Script for AI Consul Lite
  * Handles chat detection, UI injection, and context scraping
+ * No ES module imports - all functions inlined
  */
 
-import { getAdapter, getRecentMessages, hasChatInterface } from '../lib/platform_adapter.js'
-import { mountReplyPanel } from '../ui/index.jsx'
+// Inlined platform adapter functions
+function getAdapter(hostname) {
+  const adapters = {
+    'web.whatsapp.com': {
+      name: 'WhatsApp',
+      inputSelector: '.lexical-rich-text-input div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"])',
+      messageSelector: 'div[class*="x1c4vz4f"]',
+      getMessageText: (element) => {
+        const textElement = element.querySelector('[data-testid="msg-container"] span[dir="ltr"]') ||
+                           element.querySelector('span[dir="ltr"]') ||
+                           element.querySelector('.selectable-text')
+        return textElement ? textElement.textContent.trim() : ''
+      },
+      getMessageRole: (element) => {
+        const isOutgoing = element.querySelector('[data-testid="msg-container"]')?.getAttribute('data-testid')?.includes('outgoing') ||
+                          element.classList.toString().includes('outgoing')
+        return isOutgoing ? 'user' : 'assistant'
+      },
+      insertText: (inputField, text) => {
+        try {
+          inputField.focus()
+          inputField.innerHTML = ''
+          
+          const paragraph = document.createElement('p')
+          paragraph.className = 'selectable-text copyable-text x15bjb6t x1n2onr6'
+          paragraph.setAttribute('dir', 'ltr')
+          paragraph.style.cssText = 'text-indent: 0px; margin-top: 0px; margin-bottom: 0px;'
+          
+          const span = document.createElement('span')
+          span.className = 'selectable-text copyable-text xkrh14z'
+          span.setAttribute('data-lexical-text', 'true')
+          span.textContent = text
+          
+          paragraph.appendChild(span)
+          inputField.appendChild(paragraph)
+          
+          inputField.dispatchEvent(new Event('input', { bubbles: true }))
+          inputField.dispatchEvent(new Event('change', { bubbles: true }))
+          inputField.dispatchEvent(new Event('keyup', { bubbles: true }))
+          inputField.dispatchEvent(new Event('keydown', { bubbles: true }))
+          
+          return true
+        } catch (error) {
+          console.error('Error inserting text:', error)
+          return false
+        }
+      }
+    },
+    'web.telegram.org': {
+      name: 'Telegram',
+      inputSelector: '.input-message-container [contenteditable="true"]',
+      messageSelector: '.message',
+      getMessageText: (element) => element.textContent.trim(),
+      getMessageRole: (element) => element.classList.contains('message-out') ? 'user' : 'assistant',
+      insertText: (inputField, text) => {
+        inputField.textContent = text
+        inputField.dispatchEvent(new Event('input', { bubbles: true }))
+        return true
+      }
+    },
+    'app.slack.com': {
+      name: 'Slack',
+      inputSelector: '[data-qa="message_input"]',
+      messageSelector: '[data-qa="message"]',
+      getMessageText: (element) => element.textContent.trim(),
+      getMessageRole: (element) => element.classList.contains('c-message--sent') ? 'user' : 'assistant',
+      insertText: (inputField, text) => {
+        inputField.value = text
+        inputField.dispatchEvent(new Event('input', { bubbles: true }))
+        return true
+      }
+    }
+  }
+  
+  return adapters[hostname] || null
+}
+
+function getRecentMessages(adapter, limit = 10) {
+  const messages = []
+  const messageElements = document.querySelectorAll(adapter.messageSelector)
+  
+  for (let i = Math.max(0, messageElements.length - limit); i < messageElements.length; i++) {
+    const element = messageElements[i]
+    const text = adapter.getMessageText(element)
+    const role = adapter.getMessageRole(element)
+    
+    if (text) {
+      messages.push({ text, role })
+    }
+  }
+  
+  return messages
+}
+
+function hasChatInterface(adapter) {
+  return document.querySelector(adapter.inputSelector) !== null
+}
+
+// Inlined React UI mounting function (simplified)
+function mountReplyPanel(shadowRoot, props) {
+  const { onGenerate, onClose, onInsert } = props
+  
+  // Create a simple HTML structure instead of React
+  const panelHTML = `
+    <div style="
+      width: 100%;
+      height: 100%;
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-sizing: border-box;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    ">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: #333; font-size: 18px;">AI Consul Lite</h3>
+        <button id="close-btn" style="
+          background: #f0f0f0;
+          border: none;
+          border-radius: 50%;
+          width: 30px;
+          height: 30px;
+          cursor: pointer;
+          font-size: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        ">×</button>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">Tone:</label>
+        <select id="tone-select" style="
+          width: 100%;
+          padding: 8px 12px;
+          border: 1px solid #ddd;
+          border-radius: 6px;
+          font-size: 14px;
+        ">
+          <option value="professional">Professional</option>
+          <option value="casual">Casual</option>
+          <option value="friendly">Friendly</option>
+          <option value="formal">Formal</option>
+        </select>
+      </div>
+      
+      <div style="margin-bottom: 20px;">
+        <button id="generate-btn" style="
+          width: 100%;
+          padding: 12px;
+          background: #4688F1;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+        ">Generate Suggestions</button>
+      </div>
+      
+      <div id="suggestions" style="
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #eee;
+        border-radius: 6px;
+        padding: 12px;
+        background: #f9f9f9;
+      ">
+        <p style="margin: 0; color: #666; font-style: italic;">Click "Generate Suggestions" to get AI-powered replies</p>
+      </div>
+    </div>
+  `
+  
+  shadowRoot.innerHTML = panelHTML
+  
+  // Add event listeners
+  const closeBtn = shadowRoot.getElementById('close-btn')
+  const generateBtn = shadowRoot.getElementById('generate-btn')
+  const suggestionsDiv = shadowRoot.getElementById('suggestions')
+  
+  closeBtn.addEventListener('click', onClose)
+  
+  generateBtn.addEventListener('click', async () => {
+    generateBtn.textContent = 'Generating...'
+    generateBtn.disabled = true
+    
+    try {
+      const suggestions = await onGenerate()
+      suggestionsDiv.innerHTML = suggestions.map(suggestion => `
+        <div style="
+          margin-bottom: 12px;
+          padding: 12px;
+          background: white;
+          border-radius: 6px;
+          border: 1px solid #e0e0e0;
+          cursor: pointer;
+        " data-suggestion="${suggestion}">
+          <p style="margin: 0; font-size: 14px; line-height: 1.4;">${suggestion}</p>
+        </div>
+      `).join('')
+      
+      // Add click listeners to suggestions
+      suggestionsDiv.querySelectorAll('[data-suggestion]').forEach(element => {
+        element.addEventListener('click', () => {
+          const suggestion = element.getAttribute('data-suggestion')
+          onInsert(suggestion)
+          onClose()
+        })
+      })
+      
+    } catch (error) {
+      suggestionsDiv.innerHTML = `<p style="color: red; margin: 0;">Error: ${error.message}</p>`
+    } finally {
+      generateBtn.textContent = 'Generate Suggestions'
+      generateBtn.disabled = false
+    }
+  })
+}
 
 // State management
 let isExtensionActive = false
@@ -16,9 +232,12 @@ let replyPanel = null
  * Initialize the content script
  */
 async function initialize() {
+  console.log('🚀 AI Consul Lite Content Script Starting...')
+  
   // Check if extension is enabled
   const extensionEnabled = await chrome.storage.sync.get('extensionEnabled')
   if (extensionEnabled.extensionEnabled === false) {
+    console.log('⏸️ Extension disabled globally')
     return
   }
 
@@ -28,17 +247,19 @@ async function initialize() {
   const siteEnabled = siteStates.siteStates?.[hostname] !== false
 
   if (!siteEnabled) {
+    console.log('⏸️ Extension disabled for this site:', hostname)
     return
   }
 
   // Get platform adapter
   currentAdapter = getAdapter(hostname)
   if (!currentAdapter) {
+    console.log('❌ No adapter found for hostname:', hostname)
     return
   }
 
   isExtensionActive = true
-  console.log(`AI Consul Lite active on ${currentAdapter.name}`)
+  console.log(`✅ AI Consul Lite active on ${currentAdapter.name}`)
 
   // Start monitoring for chat interface
   monitorForChatInterface()
@@ -448,7 +669,7 @@ function toggleReplyPanel() {
     console.log('✅ Shadow root created:', shadowRoot)
 
     // Mount React UI
-    console.log('⚛️ Mounting React UI...')
+    console.log('⚛️ Mounting UI...')
     replyPanel = shadowRoot
     
     try {
@@ -463,9 +684,9 @@ function toggleReplyPanel() {
         },
         onInsert: insertText
       })
-      console.log('✅ React UI mounted successfully')
+      console.log('✅ UI mounted successfully')
     } catch (error) {
-      console.error('❌ Error mounting React UI:', error)
+      console.error('❌ Error mounting UI:', error)
       throw error
     }
 
@@ -513,86 +734,47 @@ function toggleReplyPanel() {
 /**
  * Handle suggestion generation
  */
-async function handleGenerateSuggestions(tone) {
+async function handleGenerateSuggestions() {
+  console.log('🔄 Generating suggestions...')
+  
   try {
-    // Get recent messages
-    const messages = getRecentMessages(currentAdapter, 5)
+    // Get recent messages for context
+    const recentMessages = getRecentMessages(currentAdapter, 5)
+    console.log('📝 Recent messages:', recentMessages)
     
-    if (messages.length === 0) {
-      throw new Error('No recent messages found')
-    }
-
-    // Get default provider
-    const providerResult = await chrome.storage.sync.get('defaultProvider')
-    const provider = providerResult.defaultProvider || 'openai'
-
-    // Send request to background script
+    // Get tone from storage
+    const tone = await chrome.storage.sync.get('defaultTone')
+    const selectedTone = tone.defaultTone || 'professional'
+    
+    // Send message to background script
     const response = await chrome.runtime.sendMessage({
       type: 'GET_SUGGESTIONS',
-      context: messages,
-      tone: tone,
-      provider: provider
+      messages: recentMessages,
+      tone: selectedTone
     })
-
-    if (response.success) {
-      return response.suggestions
-    } else {
-      throw new Error(response.error)
-    }
+    
+    console.log('✅ Suggestions received:', response)
+    return response.suggestions || ['No suggestions available']
+    
   } catch (error) {
-    console.error('Error generating suggestions:', error)
-    throw error
+    console.error('❌ Error generating suggestions:', error)
+    return ['Error generating suggestions. Please try again.']
   }
 }
 
 /**
- * Insert text into the chat input
+ * Insert text into the input field
  */
 function insertText(text) {
-  if (currentAdapter && currentAdapter.insertText) {
-    currentAdapter.insertText(text)
-  }
-}
-
-// Listen for storage changes to update state
-chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync') {
-    if (changes.extensionEnabled) {
-      if (changes.extensionEnabled.newValue === false) {
-        cleanup()
-      } else {
-        initialize()
-      }
-    }
-
-    if (changes.siteStates) {
-      const hostname = window.location.hostname
-      const siteEnabled = changes.siteStates.newValue?.[hostname] !== false
-      
-      if (!siteEnabled) {
-        cleanup()
-      } else {
-        initialize()
-      }
-    }
-  }
-})
-
-/**
- * Cleanup function
- */
-function cleanup() {
-  isExtensionActive = false
+  console.log('📝 Inserting text:', text)
   
-  if (aiIcon) {
-    aiIcon.remove()
-    aiIcon = null
+  const inputField = document.querySelector(currentAdapter.inputSelector)
+  if (!inputField) {
+    console.error('❌ No input field found for text insertion')
+    return false
   }
   
-  if (replyPanel) {
-    replyPanel.remove()
-    replyPanel = null
-  }
+  return currentAdapter.insertText(inputField, text)
 }
 
 // Initialize when DOM is ready

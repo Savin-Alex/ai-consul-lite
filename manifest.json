@@ -48,7 +48,7 @@
       "https://meet.google.com/*",
       "https://zoom.us/*"
     ],
-    "js": ["content/content-whatsapp-simple.js"],
+    "js": ["content/content-simple.js"],
     "run_at": "document_idle"
   }]
 }
