@@ -48,7 +48,15 @@ function PopupPage() {
 
       // Get current tab hostname for site state
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      const hostname = tab ? new URL(tab.url).hostname : ''
+      let hostname = ''
+      if (tab && tab.url) {
+        try {
+          hostname = new URL(tab.url).hostname
+        } catch (error) {
+          console.warn('Invalid tab URL:', tab.url)
+          hostname = 'unknown'
+        }
+      }
       const siteEnabled = extensionResult.siteStates?.[hostname] !== false
 
       setSettings({
@@ -66,9 +74,16 @@ function PopupPage() {
   const loadCurrentTab = async () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-      if (tab) {
-        const url = new URL(tab.url)
-        setCurrentSite(url.hostname)
+      if (tab && tab.url) {
+        try {
+          const url = new URL(tab.url)
+          setCurrentSite(url.hostname)
+        } catch (error) {
+          console.warn('Invalid tab URL:', tab.url)
+          setCurrentSite('Unknown')
+        }
+      } else {
+        setCurrentSite('Unknown')
       }
     } catch (error) {
       console.error('Failed to get current tab:', error)
@@ -84,12 +99,16 @@ function PopupPage() {
         await chrome.storage.sync.set({ voiceEnabled: value })
       } else if (setting === 'siteEnabled') {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
-        if (tab) {
-          const hostname = new URL(tab.url).hostname
-          const siteStates = await chrome.storage.sync.get('siteStates')
-          const updatedStates = { ...siteStates.siteStates }
-          updatedStates[hostname] = value
-          await chrome.storage.sync.set({ siteStates: updatedStates })
+        if (tab && tab.url) {
+          try {
+            const hostname = new URL(tab.url).hostname
+            const siteStates = await chrome.storage.sync.get('siteStates')
+            const updatedStates = { ...siteStates.siteStates }
+            updatedStates[hostname] = value
+            await chrome.storage.sync.set({ siteStates: updatedStates })
+          } catch (error) {
+            console.warn('Invalid tab URL for site toggle:', tab.url)
+          }
         }
       }
 
