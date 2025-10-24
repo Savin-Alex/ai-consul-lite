@@ -91,7 +91,7 @@ describe('Platform Adapter', () => {
     it('should determine message role correctly', () => {
       const outgoingElement = document.createElement('div')
       outgoingElement.innerHTML = `
-        <div data-testid="msg-container-outgoing">
+        <div data-testid="msg-out">
           <span>Outgoing message</span>
         </div>
       `
@@ -109,14 +109,17 @@ describe('Platform Adapter', () => {
 
     it('should insert text correctly', () => {
       const mockInput = document.createElement('div')
-      mockInput.setAttribute('contenteditable', 'true')
-      mockInput.setAttribute('role', 'textbox')
+      mockInput.className = 'lexical-rich-text-input'
+      mockInput.innerHTML = '<div contenteditable="true" role="textbox"></div>'
+      document.body.appendChild(mockInput)
       
-      const result = adapter.insertText(mockInput, 'Test message')
+      adapter.insertText('Test message')
       
-      expect(result).toBe(true)
-      expect(mockInput.innerHTML).toContain('Test message')
-      expect(mockInput.innerHTML).toContain('data-lexical-text="true"')
+      // Check that the text was inserted (the function doesn't return a value)
+      const contentEditableDiv = mockInput.querySelector('[contenteditable="true"]')
+      expect(contentEditableDiv.textContent).toBe('Test message')
+      
+      document.body.removeChild(mockInput)
     })
   })
 
@@ -128,14 +131,14 @@ describe('Platform Adapter', () => {
     })
 
     it('should have correct selectors', () => {
-      expect(adapter.inputSelector).toBe('.input-message-container [contenteditable="true"]')
-      expect(adapter.messageSelector).toBe('.message')
+      expect(adapter.inputSelector).toBe('.input-message-container .input-message-input')
+      expect(adapter.messageSelector).toBe('.messages-container .message')
     })
 
     it('should extract message text correctly', () => {
       const mockElement = document.createElement('div')
       mockElement.className = 'message'
-      mockElement.textContent = 'Telegram message'
+      mockElement.innerHTML = '<div class="message-text">Telegram message</div>'
       
       const text = adapter.getMessageText(mockElement)
       expect(text).toBe('Telegram message')
@@ -153,13 +156,20 @@ describe('Platform Adapter', () => {
     })
 
     it('should insert text correctly', () => {
+      const mockContainer = document.createElement('div')
+      mockContainer.className = 'input-message-container'
       const mockInput = document.createElement('div')
+      mockInput.className = 'input-message-input'
       mockInput.setAttribute('contenteditable', 'true')
+      mockContainer.appendChild(mockInput)
+      document.body.appendChild(mockContainer)
       
-      const result = adapter.insertText(mockInput, 'Telegram test')
+      adapter.insertText('Telegram test')
       
-      expect(result).toBe(true)
+      // Check that the text was inserted (the function doesn't return a value)
       expect(mockInput.textContent).toBe('Telegram test')
+      
+      document.body.removeChild(mockContainer)
     })
   })
 
@@ -172,13 +182,13 @@ describe('Platform Adapter', () => {
 
     it('should have correct selectors', () => {
       expect(adapter.inputSelector).toBe('[data-qa="message_input"]')
-      expect(adapter.messageSelector).toBe('[data-qa="message"]')
+      expect(adapter.messageSelector).toBe('[data-qa="virtual-list"] [data-qa="message_container"]')
     })
 
     it('should extract message text correctly', () => {
       const mockElement = document.createElement('div')
-      mockElement.setAttribute('data-qa', 'message')
-      mockElement.textContent = 'Slack message'
+      mockElement.setAttribute('data-qa', 'message_container')
+      mockElement.innerHTML = '<div data-qa="message_text">Slack message</div>'
       
       const text = adapter.getMessageText(mockElement)
       expect(text).toBe('Slack message')
@@ -186,7 +196,7 @@ describe('Platform Adapter', () => {
 
     it('should determine message role correctly', () => {
       const sentElement = document.createElement('div')
-      sentElement.className = 'c-message--sent'
+      sentElement.innerHTML = '<div data-qa="message">User message</div>'
       
       const receivedElement = document.createElement('div')
       receivedElement.className = 'c-message'
@@ -196,13 +206,17 @@ describe('Platform Adapter', () => {
     })
 
     it('should insert text correctly', () => {
-      const mockInput = document.createElement('input')
+      const mockInput = document.createElement('div')
       mockInput.setAttribute('data-qa', 'message_input')
+      mockInput.setAttribute('contenteditable', 'true')
+      document.body.appendChild(mockInput)
       
-      const result = adapter.insertText(mockInput, 'Slack test')
+      adapter.insertText('Slack test')
       
-      expect(result).toBe(true)
-      expect(mockInput.value).toBe('Slack test')
+      // Check that the text was inserted (the function doesn't return a value)
+      expect(mockInput.textContent).toBe('Slack test')
+      
+      document.body.removeChild(mockInput)
     })
   })
 
@@ -215,7 +229,7 @@ describe('Platform Adapter', () => {
       
       const message2 = document.createElement('div')
       message2.className = 'x1c4vz4f'
-      message2.innerHTML = '<div data-testid="msg-container-outgoing"><span dir="ltr">Second message</span></div>'
+      message2.innerHTML = '<div data-testid="msg-out"><span dir="ltr">Second message</span></div>'
       
       document.body.appendChild(message1)
       document.body.appendChild(message2)
@@ -224,9 +238,9 @@ describe('Platform Adapter', () => {
       const messages = getRecentMessages(adapter, 2)
       
       expect(messages).toHaveLength(2)
-      expect(messages[0].text).toBe('First message')
+      expect(messages[0].content).toBe('First message')
       expect(messages[0].role).toBe('assistant')
-      expect(messages[1].text).toBe('Second message')
+      expect(messages[1].content).toBe('Second message')
       expect(messages[1].role).toBe('user')
     })
 
@@ -243,9 +257,9 @@ describe('Platform Adapter', () => {
       const messages = getRecentMessages(adapter, 3)
       
       expect(messages).toHaveLength(3)
-      expect(messages[0].text).toBe('Message 2') // Last 3 messages
-      expect(messages[1].text).toBe('Message 3')
-      expect(messages[2].text).toBe('Message 4')
+      expect(messages[0].content).toBe('Message 2') // Last 3 messages
+      expect(messages[1].content).toBe('Message 3')
+      expect(messages[2].content).toBe('Message 4')
     })
 
     it('should return empty array when no messages found', () => {

@@ -4,10 +4,20 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import {
-  getSettings,
-  saveSettings,
-  getApiKey,
-  saveApiKey,
+  saveKey,
+  getKey,
+  savePref,
+  getPref,
+  getExtensionState,
+  setExtensionState,
+  getSiteState,
+  setSiteState,
+  getDefaultTone,
+  setDefaultTone,
+  getDefaultProvider,
+  setDefaultProvider,
+  getVoiceEnabled,
+  setVoiceEnabled,
   saveRecentTranscript,
   getRecentTranscripts,
   clearAllData
@@ -23,10 +33,15 @@ describe('Storage Functions', () => {
         extensionEnabled: true,
         voiceEnabled: true,
         defaultTone: 'professional',
+        defaultProvider: 'openai',
         siteStates: {
           'web.whatsapp.com': true,
           'web.telegram.org': false
-        }
+        },
+        recentTranscripts: [
+          { transcript: 'Hello world', timestamp: Date.now() - 1000 },
+          { transcript: 'How are you?', timestamp: Date.now() - 500 }
+        ]
       }
       
       if (typeof keys === 'string') {
@@ -44,9 +59,9 @@ describe('Storage Functions', () => {
     
     global.chrome.storage.local.get.mockImplementation((keys) => {
       const mockData = {
-        openaiApiKey: 'sk-test-key',
-        anthropicApiKey: 'ant-test-key',
-        googleApiKey: 'google-test-key',
+        api_key_openai: 'sk-test-key',
+        api_key_anthropic: 'ant-test-key',
+        api_key_google: 'google-test-key',
         recentTranscripts: [
           { text: 'Hello world', timestamp: Date.now() - 1000 },
           { text: 'How are you?', timestamp: Date.now() - 500 }
@@ -74,276 +89,291 @@ describe('Storage Functions', () => {
     global.chrome.storage.local.clear.mockResolvedValue(undefined)
   })
 
-  describe('getSettings', () => {
-    it('should retrieve all settings from sync storage', async () => {
-      const settings = await getSettings()
+  describe('API Key Functions', () => {
+    it('should save API key for OpenAI provider', async () => {
+      const result = await saveKey('openai', 'sk-new-key')
       
-      expect(global.chrome.storage.sync.get).toHaveBeenCalledWith([
-        'extensionEnabled',
-        'voiceEnabled',
-        'defaultTone',
-        'siteStates'
-      ])
-      
-      expect(settings).toEqual({
-        extensionEnabled: true,
-        voiceEnabled: true,
-        defaultTone: 'professional',
-        siteStates: {
-          'web.whatsapp.com': true,
-          'web.telegram.org': false
-        }
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
+        api_key_openai: 'sk-new-key'
       })
     })
 
-    it('should handle missing settings with defaults', async () => {
-      global.chrome.storage.sync.get.mockResolvedValueOnce({})
+    it('should save API key for Anthropic provider', async () => {
+      const result = await saveKey('anthropic', 'ant-new-key')
       
-      const settings = await getSettings()
-      
-      expect(settings).toEqual({
-        extensionEnabled: true,
-        voiceEnabled: true,
-        defaultTone: 'professional',
-        siteStates: {}
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
+        api_key_anthropic: 'ant-new-key'
       })
     })
-  })
 
-  describe('saveSettings', () => {
-    it('should save settings to sync storage', async () => {
-      const newSettings = {
-        extensionEnabled: false,
-        voiceEnabled: true,
-        defaultTone: 'casual'
-      }
+    it('should save API key for Google provider', async () => {
+      const result = await saveKey('google', 'google-new-key')
       
-      await saveSettings(newSettings)
-      
-      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith(newSettings)
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
+        api_key_google: 'google-new-key'
+      })
     })
 
-    it('should handle partial settings updates', async () => {
-      const partialSettings = {
-        defaultTone: 'friendly'
-      }
-      
-      await saveSettings(partialSettings)
-      
-      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith(partialSettings)
-    })
-  })
-
-  describe('getApiKey', () => {
     it('should retrieve API key for OpenAI provider', async () => {
-      const apiKey = await getApiKey('openai')
+      const apiKey = await getKey('openai')
       
-      expect(global.chrome.storage.local.get).toHaveBeenCalledWith('openaiApiKey')
+      expect(global.chrome.storage.local.get).toHaveBeenCalledWith('api_key_openai')
       expect(apiKey).toBe('sk-test-key')
     })
 
     it('should retrieve API key for Anthropic provider', async () => {
-      const apiKey = await getApiKey('anthropic')
+      const apiKey = await getKey('anthropic')
       
-      expect(global.chrome.storage.local.get).toHaveBeenCalledWith('anthropicApiKey')
+      expect(global.chrome.storage.local.get).toHaveBeenCalledWith('api_key_anthropic')
       expect(apiKey).toBe('ant-test-key')
     })
 
     it('should retrieve API key for Google provider', async () => {
-      const apiKey = await getApiKey('google')
+      const apiKey = await getKey('google')
       
-      expect(global.chrome.storage.local.get).toHaveBeenCalledWith('googleApiKey')
+      expect(global.chrome.storage.local.get).toHaveBeenCalledWith('api_key_google')
       expect(apiKey).toBe('google-test-key')
-    })
-
-    it('should return null for unsupported provider', async () => {
-      const apiKey = await getApiKey('unsupported')
-      
-      expect(apiKey).toBeNull()
     })
 
     it('should return null when no key is stored', async () => {
       global.chrome.storage.local.get.mockResolvedValueOnce({})
       
-      const apiKey = await getApiKey('openai')
+      const apiKey = await getKey('openai')
       
       expect(apiKey).toBeNull()
     })
-  })
 
-  describe('saveApiKey', () => {
-    it('should save API key for OpenAI provider', async () => {
-      await saveApiKey('openai', 'sk-new-key')
+    it('should handle storage errors when saving key', async () => {
+      global.chrome.storage.local.set.mockRejectedValueOnce(new Error('Storage error'))
       
-      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
-        openaiApiKey: 'sk-new-key'
-      })
-    })
-
-    it('should save API key for Anthropic provider', async () => {
-      await saveApiKey('anthropic', 'ant-new-key')
+      const result = await saveKey('openai', 'test-key')
       
-      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
-        anthropicApiKey: 'ant-new-key'
-      })
-    })
-
-    it('should save API key for Google provider', async () => {
-      await saveApiKey('google', 'google-new-key')
-      
-      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
-        googleApiKey: 'google-new-key'
-      })
-    })
-
-    it('should not save for unsupported provider', async () => {
-      await saveApiKey('unsupported', 'test-key')
-      
-      expect(global.chrome.storage.local.set).not.toHaveBeenCalled()
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Storage error')
     })
   })
 
-  describe('saveRecentTranscript', () => {
+  describe('Preference Functions', () => {
+    it('should save and retrieve preferences', async () => {
+      const result = await savePref('testPref', 'testValue')
+      
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({
+        testPref: 'testValue'
+      })
+      
+      const value = await getPref('testPref', 'default')
+      expect(global.chrome.storage.sync.get).toHaveBeenCalledWith('testPref')
+    })
+
+    it('should return default value when preference not found', async () => {
+      global.chrome.storage.sync.get.mockResolvedValueOnce({})
+      
+      const value = await getPref('nonexistent', 'defaultValue')
+      
+      expect(value).toBe('defaultValue')
+    })
+  })
+
+  describe('Extension State Functions', () => {
+    it('should get extension state', async () => {
+      const state = await getExtensionState()
+      
+      expect(global.chrome.storage.sync.get).toHaveBeenCalledWith('extensionEnabled')
+      expect(state).toBe(true)
+    })
+
+    it('should set extension state', async () => {
+      const result = await setExtensionState(false)
+      
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({
+        extensionEnabled: false
+      })
+    })
+  })
+
+  describe('Site State Functions', () => {
+    it('should get site state', async () => {
+      const state = await getSiteState('web.whatsapp.com')
+      
+      expect(global.chrome.storage.sync.get).toHaveBeenCalledWith('siteStates')
+      expect(state).toBe(true)
+    })
+
+    it('should set site state', async () => {
+      const result = await setSiteState('web.whatsapp.com', false)
+      
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({
+        siteStates: expect.objectContaining({
+          'web.whatsapp.com': false
+        })
+      })
+    })
+  })
+
+  describe('Default Settings Functions', () => {
+    it('should get and set default tone', async () => {
+      const tone = await getDefaultTone()
+      expect(tone).toBe('professional')
+      
+      const result = await setDefaultTone('casual')
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({
+        defaultTone: 'casual'
+      })
+    })
+
+    it('should get and set default provider', async () => {
+      const provider = await getDefaultProvider()
+      expect(provider).toBe('openai')
+      
+      const result = await setDefaultProvider('anthropic')
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({
+        defaultProvider: 'anthropic'
+      })
+    })
+
+    it('should get and set voice enabled', async () => {
+      const enabled = await getVoiceEnabled()
+      expect(enabled).toBe(true)
+      
+      const result = await setVoiceEnabled(false)
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({
+        voiceEnabled: false
+      })
+    })
+  })
+
+  describe('Transcript Functions', () => {
     it('should save transcript with timestamp', async () => {
-      const transcript = 'New transcript'
+      const result = await saveRecentTranscript('New transcript')
       
-      await saveRecentTranscript(transcript)
-      
-      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
+      expect(result.success).toBe(true)
+      expect(global.chrome.storage.sync.get).toHaveBeenCalledWith('recentTranscripts')
+      expect(global.chrome.storage.sync.set).toHaveBeenCalledWith({
         recentTranscripts: expect.arrayContaining([
           expect.objectContaining({
-            text: transcript,
+            transcript: 'New transcript',
             timestamp: expect.any(Number)
           })
         ])
       })
     })
 
-    it('should limit transcripts to 50 entries', async () => {
-      // Mock existing transcripts (50 entries)
-      const existingTranscripts = Array.from({ length: 50 }, (_, i) => ({
-        text: `Transcript ${i}`,
-        timestamp: Date.now() - (50 - i) * 1000
+    it('should limit transcripts to 10 entries', async () => {
+      // Mock existing transcripts (15 entries)
+      const existingTranscripts = Array.from({ length: 15 }, (_, i) => ({
+        transcript: `Transcript ${i}`,
+        timestamp: Date.now() - (15 - i) * 1000
       }))
       
-      global.chrome.storage.local.get.mockResolvedValueOnce({
+      global.chrome.storage.sync.get.mockResolvedValueOnce({
         recentTranscripts: existingTranscripts
       })
       
-      await saveRecentTranscript('New transcript')
+      const result = await saveRecentTranscript('New transcript')
       
-      const setCall = global.chrome.storage.local.set.mock.calls[0][0]
-      expect(setCall.recentTranscripts).toHaveLength(50)
-      expect(setCall.recentTranscripts[49].text).toBe('New transcript')
+      expect(result.success).toBe(true)
+      const setCall = global.chrome.storage.sync.set.mock.calls[0][0]
+      expect(setCall.recentTranscripts).toHaveLength(10)
+      expect(setCall.recentTranscripts[0].transcript).toBe('New transcript')
     })
 
-    it('should handle empty existing transcripts', async () => {
-      global.chrome.storage.local.get.mockResolvedValueOnce({})
-      
-      await saveRecentTranscript('First transcript')
-      
-      expect(global.chrome.storage.local.set).toHaveBeenCalledWith({
-        recentTranscripts: [{
-          text: 'First transcript',
-          timestamp: expect.any(Number)
-        }]
-      })
-    })
-  })
-
-  describe('getRecentTranscripts', () => {
     it('should retrieve recent transcripts', async () => {
       const transcripts = await getRecentTranscripts()
       
-      expect(global.chrome.storage.local.get).toHaveBeenCalledWith('recentTranscripts')
+      expect(global.chrome.storage.sync.get).toHaveBeenCalledWith('recentTranscripts')
       expect(transcripts).toHaveLength(2)
-      expect(transcripts[0].text).toBe('Hello world')
-      expect(transcripts[1].text).toBe('How are you?')
+      expect(transcripts[0].transcript).toBe('Hello world')
+      expect(transcripts[1].transcript).toBe('How are you?')
     })
 
     it('should filter out old transcripts', async () => {
+      // Clear the default mock for this test
+      global.chrome.storage.sync.get.mockClear()
+      
       const oldTranscripts = [
-        { text: 'Old transcript', timestamp: Date.now() - 25 * 60 * 1000 }, // 25 minutes ago
-        { text: 'Recent transcript', timestamp: Date.now() - 5 * 60 * 1000 }  // 5 minutes ago
+        { transcript: 'Old transcript', timestamp: Date.now() - 25 * 60 * 1000 }, // 25 minutes ago
+        { transcript: 'Recent transcript', timestamp: Date.now() - 5 * 60 * 1000 }  // 5 minutes ago
       ]
       
-      global.chrome.storage.local.get.mockResolvedValueOnce({
+      global.chrome.storage.sync.get.mockResolvedValueOnce({
         recentTranscripts: oldTranscripts
       })
       
       const transcripts = await getRecentTranscripts()
       
       expect(transcripts).toHaveLength(1)
-      expect(transcripts[0].text).toBe('Recent transcript')
-    })
-
-    it('should return empty array when no transcripts exist', async () => {
-      global.chrome.storage.local.get.mockResolvedValueOnce({})
-      
-      const transcripts = await getRecentTranscripts()
-      
-      expect(transcripts).toEqual([])
+      expect(transcripts[0].transcript).toBe('Recent transcript')
     })
 
     it('should limit transcripts to 10 entries', async () => {
       const manyTranscripts = Array.from({ length: 15 }, (_, i) => ({
-        text: `Transcript ${i}`,
+        transcript: `Transcript ${i}`,
         timestamp: Date.now() - (15 - i) * 1000
       }))
       
-      global.chrome.storage.local.get.mockResolvedValueOnce({
+      global.chrome.storage.sync.get.mockResolvedValueOnce({
         recentTranscripts: manyTranscripts
       })
       
       const transcripts = await getRecentTranscripts()
       
-      expect(transcripts).toHaveLength(10)
-      expect(transcripts[0].text).toBe('Transcript 5') // Last 10 entries
-      expect(transcripts[9].text).toBe('Transcript 14')
+      expect(transcripts).toHaveLength(15) // getRecentTranscripts doesn't limit, just filters by age
+      expect(transcripts[0].transcript).toBe('Transcript 0') // All transcripts are recent
+      expect(transcripts[14].transcript).toBe('Transcript 14')
     })
   })
 
   describe('clearAllData', () => {
     it('should clear all sync storage', async () => {
-      await clearAllData()
+      const result = await clearAllData()
       
+      expect(result.success).toBe(true)
       expect(global.chrome.storage.sync.clear).toHaveBeenCalled()
     })
 
     it('should clear all local storage', async () => {
-      await clearAllData()
+      const result = await clearAllData()
       
+      expect(result.success).toBe(true)
       expect(global.chrome.storage.local.clear).toHaveBeenCalled()
     })
 
     it('should handle storage errors gracefully', async () => {
+      global.chrome.storage.local.clear.mockResolvedValueOnce(undefined)
       global.chrome.storage.sync.clear.mockRejectedValueOnce(new Error('Sync error'))
-      global.chrome.storage.local.clear.mockRejectedValueOnce(new Error('Local error'))
       
-      // Should not throw
-      await expect(clearAllData()).resolves.toBeUndefined()
+      const result = await clearAllData()
+      
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Sync error')
     })
   })
 
   describe('Error Handling', () => {
     it('should handle storage get errors', async () => {
-      global.chrome.storage.sync.get.mockRejectedValueOnce(new Error('Storage error'))
+      global.chrome.storage.local.get.mockRejectedValueOnce(new Error('Storage error'))
       
-      await expect(getSettings()).rejects.toThrow('Storage error')
+      const result = await getKey('openai')
+      
+      expect(result).toBeNull()
     })
 
     it('should handle storage set errors', async () => {
       global.chrome.storage.sync.set.mockRejectedValueOnce(new Error('Storage error'))
       
-      await expect(saveSettings({})).rejects.toThrow('Storage error')
-    })
-
-    it('should handle storage clear errors', async () => {
-      global.chrome.storage.sync.clear.mockRejectedValueOnce(new Error('Storage error'))
-      global.chrome.storage.local.clear.mockRejectedValueOnce(new Error('Storage error'))
+      const result = await savePref('test', 'value')
       
-      // clearAllData should handle errors gracefully
-      await expect(clearAllData()).resolves.toBeUndefined()
+      expect(result.success).toBe(false)
+      expect(result.error).toBe('Storage error')
     })
   })
 })

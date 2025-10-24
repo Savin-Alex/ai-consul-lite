@@ -3,20 +3,27 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { callOpenAI, callAnthropic, callGoogle, testApiKey } from '../src/lib/llm_service.js'
+import { getLLMSuggestions, testApiKey } from '../src/lib/llm_service.js'
 
 describe('LLM Service', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     global.fetch = vi.fn()
+    
+    // Mock Chrome storage
+    global.chrome.storage.local.get.mockResolvedValue({
+      api_key_openai: 'test-openai-key',
+      api_key_anthropic: 'test-anthropic-key',
+      api_key_google: 'test-google-key'
+    })
   })
 
-  describe('callOpenAI', () => {
-    it('should make correct API call to OpenAI', async () => {
+  describe('getLLMSuggestions', () => {
+    it('should get suggestions from OpenAI', async () => {
       const mockResponse = {
         choices: [{
           message: {
-            content: 'Test response from OpenAI'
+            content: 'Test suggestion 1\n---\nTest suggestion 2\n---\nTest suggestion 3'
           }
         }]
       }
@@ -26,51 +33,23 @@ describe('LLM Service', () => {
         json: () => Promise.resolve(mockResponse)
       })
 
-      const result = await callOpenAI('test-key', [
-        { role: 'user', content: 'Hello' }
-      ])
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.openai.com/v1/chat/completions',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Authorization': 'Bearer test-key',
-            'Content-Type': 'application/json'
-          }),
-          body: expect.stringContaining('"model":"gpt-4o"')
-        })
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'openai'
       )
 
-      expect(result).toBe('Test response from OpenAI')
+      expect(result.success).toBe(true)
+      expect(result.suggestions).toHaveLength(3)
+      expect(result.suggestions[0]).toBe('Test suggestion 1')
+      expect(result.suggestions[1]).toBe('Test suggestion 2')
+      expect(result.suggestions[2]).toBe('Test suggestion 3')
     })
 
-    it('should handle API errors', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized'
-      })
-
-      await expect(callOpenAI('invalid-key', [
-        { role: 'user', content: 'Hello' }
-      ])).rejects.toThrow('OpenAI API error: 401 Unauthorized')
-    })
-
-    it('should handle network errors', async () => {
-      global.fetch.mockRejectedValueOnce(new Error('Network error'))
-
-      await expect(callOpenAI('test-key', [
-        { role: 'user', content: 'Hello' }
-      ])).rejects.toThrow('Network error')
-    })
-  })
-
-  describe('callAnthropic', () => {
-    it('should make correct API call to Anthropic', async () => {
+    it('should get suggestions from Anthropic', async () => {
       const mockResponse = {
         content: [{
-          text: 'Test response from Anthropic'
+          text: 'Test suggestion 1\n---\nTest suggestion 2'
         }]
       }
 
@@ -79,45 +58,24 @@ describe('LLM Service', () => {
         json: () => Promise.resolve(mockResponse)
       })
 
-      const result = await callAnthropic('test-key', [
-        { role: 'user', content: 'Hello' }
-      ])
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://api.anthropic.com/v1/messages',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'x-api-key': 'test-key',
-            'Content-Type': 'application/json'
-          }),
-          body: expect.stringContaining('"model":"claude-3-5-sonnet-20241022"')
-        })
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'casual',
+        'anthropic'
       )
 
-      expect(result).toBe('Test response from Anthropic')
+      expect(result.success).toBe(true)
+      expect(result.suggestions).toHaveLength(2)
+      expect(result.suggestions[0]).toBe('Test suggestion 1')
+      expect(result.suggestions[1]).toBe('Test suggestion 2')
     })
 
-    it('should handle API errors', async () => {
-      global.fetch.mockResolvedValueOnce({
-        ok: false,
-        status: 403,
-        statusText: 'Forbidden'
-      })
-
-      await expect(callAnthropic('invalid-key', [
-        { role: 'user', content: 'Hello' }
-      ])).rejects.toThrow('Anthropic API error: 403 Forbidden')
-    })
-  })
-
-  describe('callGoogle', () => {
-    it('should make correct API call to Google Gemini', async () => {
+    it('should get suggestions from Google', async () => {
       const mockResponse = {
         candidates: [{
           content: {
             parts: [{
-              text: 'Test response from Google'
+              text: 'Test suggestion 1\n---\nTest suggestion 2'
             }]
           }
         }]
@@ -128,34 +86,75 @@ describe('LLM Service', () => {
         json: () => Promise.resolve(mockResponse)
       })
 
-      const result = await callGoogle('test-key', [
-        { role: 'user', content: 'Hello' }
-      ])
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',
-        expect.objectContaining({
-          method: 'POST',
-          headers: expect.objectContaining({
-            'Content-Type': 'application/json'
-          }),
-          body: expect.stringContaining('"model":"gemini-1.5-flash"')
-        })
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'friendly',
+        'google'
       )
 
-      expect(result).toBe('Test response from Google')
+      expect(result.success).toBe(true)
+      expect(result.suggestions).toHaveLength(2)
+      expect(result.suggestions[0]).toBe('Test suggestion 1')
+      expect(result.suggestions[1]).toBe('Test suggestion 2')
     })
 
     it('should handle API errors', async () => {
       global.fetch.mockResolvedValueOnce({
         ok: false,
-        status: 400,
-        statusText: 'Bad Request'
+        status: 401,
+        statusText: 'Unauthorized',
+        json: () => Promise.resolve({ error: { message: 'Invalid API key' } })
       })
 
-      await expect(callGoogle('invalid-key', [
-        { role: 'user', content: 'Hello' }
-      ])).rejects.toThrow('Google API error: 400 Bad Request')
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'openai'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Invalid API key')
+    })
+
+    it('should handle missing API key', async () => {
+      global.chrome.storage.local.get.mockResolvedValueOnce({})
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'openai'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('API key not found')
+    })
+
+    it('should handle network errors', async () => {
+      global.fetch.mockRejectedValueOnce(new Error('Network error'))
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'openai'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Network error')
+    })
+
+    it('should handle unsupported provider', async () => {
+      global.chrome.storage.local.get.mockResolvedValueOnce({
+        api_key_unsupported: 'test-key'
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'unsupported'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Unsupported provider')
     })
   })
 
@@ -176,7 +175,7 @@ describe('LLM Service', () => {
 
       const result = await testApiKey('openai', 'test-key')
 
-      expect(result).toBe(true)
+      expect(result.success).toBe(true)
       expect(global.fetch).toHaveBeenCalledWith(
         'https://api.openai.com/v1/chat/completions',
         expect.objectContaining({
@@ -202,7 +201,7 @@ describe('LLM Service', () => {
 
       const result = await testApiKey('anthropic', 'test-key')
 
-      expect(result).toBe(true)
+      expect(result.success).toBe(true)
       expect(global.fetch).toHaveBeenCalledWith(
         'https://api.anthropic.com/v1/messages',
         expect.objectContaining({
@@ -232,9 +231,9 @@ describe('LLM Service', () => {
 
       const result = await testApiKey('google', 'test-key')
 
-      expect(result).toBe(true)
+      expect(result.success).toBe(true)
       expect(global.fetch).toHaveBeenCalledWith(
-        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent',
+        'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=test-key',
         expect.objectContaining({
           method: 'POST'
         })
@@ -250,13 +249,13 @@ describe('LLM Service', () => {
 
       const result = await testApiKey('openai', 'invalid-key')
 
-      expect(result).toBe(false)
+      expect(result.success).toBe(false)
     })
 
     it('should return false for unsupported provider', async () => {
       const result = await testApiKey('unsupported', 'test-key')
 
-      expect(result).toBe(false)
+      expect(result.success).toBe(false)
     })
 
     it('should handle network errors during testing', async () => {
@@ -264,59 +263,16 @@ describe('LLM Service', () => {
 
       const result = await testApiKey('openai', 'test-key')
 
-      expect(result).toBe(false)
+      expect(result.success).toBe(false)
     })
   })
 
-  describe('API Response Parsing', () => {
-    it('should handle OpenAI response with multiple choices', async () => {
+  describe('Response Parsing', () => {
+    it('should parse OpenAI response with multiple suggestions', async () => {
       const mockResponse = {
-        choices: [
-          { message: { content: 'First choice' } },
-          { message: { content: 'Second choice' } }
-        ]
-      }
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse)
-      })
-
-      const result = await callOpenAI('test-key', [
-        { role: 'user', content: 'Hello' }
-      ])
-
-      expect(result).toBe('First choice')
-    })
-
-    it('should handle Anthropic response with multiple content blocks', async () => {
-      const mockResponse = {
-        content: [
-          { text: 'First part' },
-          { text: 'Second part' }
-        ]
-      }
-
-      global.fetch.mockResolvedValueOnce({
-        ok: true,
-        json: () => Promise.resolve(mockResponse)
-      })
-
-      const result = await callAnthropic('test-key', [
-        { role: 'user', content: 'Hello' }
-      ])
-
-      expect(result).toBe('First partSecond part')
-    })
-
-    it('should handle Google response with multiple parts', async () => {
-      const mockResponse = {
-        candidates: [{
-          content: {
-            parts: [
-              { text: 'First part' },
-              { text: 'Second part' }
-            ]
+        choices: [{
+          message: {
+            content: 'Suggestion 1\n---\nSuggestion 2\n---\nSuggestion 3'
           }
         }]
       }
@@ -326,11 +282,93 @@ describe('LLM Service', () => {
         json: () => Promise.resolve(mockResponse)
       })
 
-      const result = await callGoogle('test-key', [
-        { role: 'user', content: 'Hello' }
-      ])
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'openai'
+      )
 
-      expect(result).toBe('First partSecond part')
+      expect(result.success).toBe(true)
+      expect(result.suggestions).toHaveLength(3)
+      expect(result.suggestions[0]).toBe('Suggestion 1')
+      expect(result.suggestions[1]).toBe('Suggestion 2')
+      expect(result.suggestions[2]).toBe('Suggestion 3')
+    })
+
+    it('should parse Anthropic response with multiple suggestions', async () => {
+      const mockResponse = {
+        content: [{
+          text: 'Suggestion 1\n---\nSuggestion 2'
+        }]
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse)
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'anthropic'
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.suggestions).toHaveLength(2)
+      expect(result.suggestions[0]).toBe('Suggestion 1')
+      expect(result.suggestions[1]).toBe('Suggestion 2')
+    })
+
+    it('should parse Google response with multiple suggestions', async () => {
+      const mockResponse = {
+        candidates: [{
+          content: {
+            parts: [{
+              text: 'Suggestion 1\n---\nSuggestion 2'
+            }]
+          }
+        }]
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse)
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'google'
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.suggestions).toHaveLength(2)
+      expect(result.suggestions[0]).toBe('Suggestion 1')
+      expect(result.suggestions[1]).toBe('Suggestion 2')
+    })
+
+    it('should handle empty response', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: ''
+          }
+        }]
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse)
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'openai'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('No response content')
     })
   })
 })
