@@ -127,13 +127,31 @@ function OptionsPage() {
 
   const testLocalConnection = async () => {
     try {
+      // First, try to check if Ollama is running with a simple API call
+      const healthResponse = await fetch('http://localhost:11434/api/tags', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        mode: 'cors' // Explicitly set CORS mode
+      })
+
+      if (!healthResponse.ok) {
+        if (healthResponse.status === 403) {
+          return { success: false, error: 'Ollama server is running but blocked the request. This is likely a CORS issue. Try running Ollama with: OLLAMA_ORIGINS="*" ollama serve' }
+        }
+        return { success: false, error: `Ollama server error: ${healthResponse.status} ${healthResponse.statusText}` }
+      }
+
+      // If health check passes, try the chat completions endpoint
       const response = await fetch('http://localhost:11434/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors', // Explicitly set CORS mode
         body: JSON.stringify({
-          model: 'llama3:8b', // Default model, can be changed
+          model: 'llama3:latest', // Use the available model from the API response
           messages: [
             { role: 'user', content: 'Hello, this is a test message.' }
           ],
@@ -143,8 +161,11 @@ function OptionsPage() {
       })
 
       if (!response.ok) {
-        if (response.status === 0 || response.status === 'ECONNREFUSED') {
-          return { success: false, error: 'Cannot connect to Ollama server. Make sure Ollama is running on localhost:11434' }
+        if (response.status === 403) {
+          return { success: false, error: 'Ollama blocked the request due to CORS. Try: OLLAMA_ORIGINS="*" ollama serve' }
+        }
+        if (response.status === 404) {
+          return { success: false, error: 'Model not found. Available models: llama3:latest, llama3.1:8b' }
         }
         const errorData = await response.json().catch(() => ({}))
         return { success: false, error: `Ollama server error: ${errorData.error?.message || response.statusText}` }
@@ -159,6 +180,9 @@ function OptionsPage() {
     } catch (error) {
       if (error.message.includes('fetch')) {
         return { success: false, error: 'Cannot connect to Ollama server. Make sure Ollama is running on localhost:11434' }
+      }
+      if (error.message.includes('CORS')) {
+        return { success: false, error: 'CORS error. Try: OLLAMA_ORIGINS="*" ollama serve' }
       }
       return { success: false, error: `Connection test failed: ${error.message}` }
     }
