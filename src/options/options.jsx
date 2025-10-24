@@ -91,7 +91,8 @@ function OptionsPage() {
   }
 
   const handleTestConnection = async () => {
-    if (!settings.apiKey.trim()) {
+    // For local LLM, we don't need an API key
+    if (settings.provider !== 'local' && !settings.apiKey.trim()) {
       showStatus('Please enter an API key first', 'error')
       return
     }
@@ -100,9 +101,16 @@ function OptionsPage() {
     setStatusMessage('')
 
     try {
-      // Import test function dynamically
-      const { testApiKey } = await import('../lib/llm_service.js')
-      const result = await testApiKey(settings.provider, settings.apiKey.trim())
+      let result
+      
+      if (settings.provider === 'local') {
+        // Test local LLM connection directly
+        result = await testLocalConnection()
+      } else {
+        // Import test function dynamically for other providers
+        const { testApiKey } = await import('../lib/llm_service.js')
+        result = await testApiKey(settings.provider, settings.apiKey.trim())
+      }
 
       if (result.success) {
         showStatus('Connection successful!', 'success')
@@ -114,6 +122,45 @@ function OptionsPage() {
       showStatus(`Test failed: ${error.message}`, 'error')
     } finally {
       setIsTestingConnection(false)
+    }
+  }
+
+  const testLocalConnection = async () => {
+    try {
+      const response = await fetch('http://localhost:11434/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'llama3:8b', // Default model, can be changed
+          messages: [
+            { role: 'user', content: 'Hello, this is a test message.' }
+          ],
+          max_tokens: 50,
+          temperature: 0.7
+        })
+      })
+
+      if (!response.ok) {
+        if (response.status === 0 || response.status === 'ECONNREFUSED') {
+          return { success: false, error: 'Cannot connect to Ollama server. Make sure Ollama is running on localhost:11434' }
+        }
+        const errorData = await response.json().catch(() => ({}))
+        return { success: false, error: `Ollama server error: ${errorData.error?.message || response.statusText}` }
+      }
+
+      const data = await response.json()
+      if (data.choices?.[0]?.message?.content) {
+        return { success: true, error: null }
+      } else {
+        return { success: false, error: 'Invalid response from Ollama server' }
+      }
+    } catch (error) {
+      if (error.message.includes('fetch')) {
+        return { success: false, error: 'Cannot connect to Ollama server. Make sure Ollama is running on localhost:11434' }
+      }
+      return { success: false, error: `Connection test failed: ${error.message}` }
     }
   }
 

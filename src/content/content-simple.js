@@ -9,7 +9,7 @@ function getAdapter(hostname) {
   const adapters = {
     'web.whatsapp.com': {
       name: 'WhatsApp',
-      inputSelector: '.lexical-rich-text-input div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"])',
+      inputSelector: 'div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])',
       messageSelector: 'div[class*="x1c4vz4f"]',
       getMessageText: (element) => {
         const textElement = element.querySelector('[data-testid="msg-container"] span[dir="ltr"]') ||
@@ -349,7 +349,7 @@ function monitorForChatInterface() {
       const specificSelectors = [
         'div[data-testid="conversation-compose-box-input"]',
         '.lexical-rich-text-input[data-testid*="compose"]',
-        '.lexical-rich-text-input div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"])'
+        'div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])'
       ]
       
       for (const selector of specificSelectors) {
@@ -420,7 +420,7 @@ function monitorForChatInterface() {
       const selectors = [
         'div[data-testid="conversation-compose-box-input"]',
         '.lexical-rich-text-input[data-testid*="compose"]',
-        '.lexical-rich-text-input div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"])',
+        'div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])',
         '.lexical-rich-text-input',
         '[contenteditable="true"]',
         '[role="textbox"]'
