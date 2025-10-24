@@ -256,8 +256,9 @@ async function callLocalLLM(context, systemPrompt) {
         'Content-Type': 'application/json'
         // No 'Authorization' header needed for local Ollama
       },
+      mode: 'cors', // Explicitly set CORS mode
       body: JSON.stringify({
-        model: 'llama3:8b', // Default model - users can change this
+        model: 'llama3:latest', // Use llama3:latest instead of llama3:8b
         messages: messages,
         max_tokens: 300,
         temperature: 0.7,
@@ -269,10 +270,12 @@ async function callLocalLLM(context, systemPrompt) {
       const errorData = await response.json().catch(() => ({}))
       let errorMessage = `Local LLM API error (HTTP ${response.status})`
       
-      if (response.status === 404) {
-        errorMessage = 'Local LLM server (Ollama) not found at http://localhost:11434. Is it running?'
+      if (response.status === 403) {
+        errorMessage = 'Ollama blocked the request due to CORS. Try: OLLAMA_ORIGINS="*" ollama serve'
+      } else if (response.status === 404) {
+        errorMessage = 'Model not found. Try running: ollama pull llama3:latest'
       } else if (response.status === 400) {
-        errorMessage = 'Model not found. Try running: ollama pull llama3:8b'
+        errorMessage = 'Model not found. Try running: ollama pull llama3:latest'
       } else if (errorData.error?.message) {
         errorMessage = errorData.error.message
       }
@@ -292,6 +295,9 @@ async function callLocalLLM(context, systemPrompt) {
     // This catch block will trigger if the server isn't running at all
     if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
       return { success: false, error: 'Connection refused. Is your local LLM server (Ollama) running at http://localhost:11434?' }
+    }
+    if (error.message.includes('CORS') || error.message.includes('cors')) {
+      return { success: false, error: 'CORS error. Try: OLLAMA_ORIGINS="*" ollama serve' }
     }
     return { success: false, error: `Local LLM Network error: ${error.message}` }
   }
