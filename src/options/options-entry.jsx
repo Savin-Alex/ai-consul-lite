@@ -6,7 +6,6 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import OptionsPage from './options.jsx'
-import './options.css'
 
 // Mount React app
 const container = document.getElementById('root')

@@ -6,7 +6,6 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import PopupPage from './popup.jsx'
-import './popup.css'
 
 // Mount React app
 const container = document.getElementById('root')

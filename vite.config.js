@@ -40,14 +40,18 @@ export default defineConfig({
           // Also remove the import statement from built files
           const filesToClean = [
             'dist/popup/popup.js',
-            'dist/options/options.js'
+            'dist/options/options.js',
+            'dist/ui/main.js',
+            'dist/jsx-runtime.js',
+            'dist/content/content.js',
+            'dist/workers/whisper-worker.js'
           ]
           
           filesToClean.forEach(filePath => {
             if (existsSync(filePath)) {
               let content = readFileSync(filePath, 'utf8')
               // Remove the import statement for _commonjsHelpers.js
-              content = content.replace(/import"[^"]*_commonjsHelpers\.js";?/g, '')
+              content = content.replace(/import[^;]*_commonjsHelpers\.js[^;]*;/g, '')
               writeFileSync(filePath, content)
               console.log(`✅ Cleaned imports from ${filePath}`)
             }
