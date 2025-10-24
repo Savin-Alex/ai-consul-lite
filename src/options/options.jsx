@@ -165,35 +165,70 @@ function OptionsPage() {
               <option value="openai">OpenAI (GPT-4o)</option>
               <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
               <option value="google">Google (Gemini Pro)</option>
+              <option value="local">Local LLM (Ollama)</option>
             </select>
           </div>
         </section>
 
-        <section className="settings-section">
-          <h2>API Key</h2>
-          <div className="form-group">
-            <label htmlFor="api-key-input">Enter your API key:</label>
-            <input 
-              type="password" 
-              id="api-key-input" 
-              value={settings.apiKey}
-              onChange={(e) => handleInputChange('apiKey', e.target.value)}
-              placeholder={hasApiKey ? "•••••••• (API key saved)" : "Your API key will be stored securely"}
-              disabled={isLoading}
-            />
-            <small className="help-text">
-              {hasApiKey ? "API key is saved. Enter a new key to replace it." : "Your API key is encrypted and stored locally. We never see your key."}
-            </small>
-          </div>
-          <button 
-            id="test-key-button" 
-            className="secondary-button"
-            onClick={handleTestConnection}
-            disabled={isLoading || isTestingConnection || !settings.apiKey.trim()}
-          >
-            {isTestingConnection ? 'Testing...' : 'Test Connection'}
-          </button>
-        </section>
+        {settings.provider === 'local' && (
+          <section className="settings-section">
+            <h2>Local LLM Setup</h2>
+            <div className="form-group">
+              <div className="info-box">
+                <h3>🚀 Using Local LLM (Ollama)</h3>
+                <p>Your extension will connect to a local Ollama server running on your computer.</p>
+                <ul>
+                  <li><strong>No API key required</strong> - completely private and free</li>
+                  <li><strong>Offline capable</strong> - works without internet</li>
+                  <li><strong>Fast responses</strong> - no network latency</li>
+                </ul>
+                <h4>Setup Instructions:</h4>
+                <ol>
+                  <li>Install Ollama from <a href="https://ollama.com" target="_blank" rel="noopener noreferrer">ollama.com</a></li>
+                  <li>Run: <code>ollama pull llama3:8b</code> (or any model you prefer)</li>
+                  <li>Start Ollama (usually runs automatically)</li>
+                  <li>Test the connection below</li>
+                </ol>
+              </div>
+            </div>
+            <button 
+              id="test-local-button" 
+              className="secondary-button"
+              onClick={handleTestConnection}
+              disabled={isLoading || isTestingConnection}
+            >
+              {isTestingConnection ? 'Testing...' : 'Test Local Connection'}
+            </button>
+          </section>
+        )}
+
+        {settings.provider !== 'local' && (
+          <section className="settings-section">
+            <h2>API Key</h2>
+            <div className="form-group">
+              <label htmlFor="api-key-input">Enter your API key:</label>
+              <input 
+                type="password" 
+                id="api-key-input" 
+                value={settings.apiKey}
+                onChange={(e) => handleInputChange('apiKey', e.target.value)}
+                placeholder={hasApiKey ? "•••••••• (API key saved)" : "Your API key will be stored securely"}
+                disabled={isLoading}
+              />
+              <small className="help-text">
+                {hasApiKey ? "API key is saved. Enter a new key to replace it." : "Your API key is encrypted and stored locally. We never see your key."}
+              </small>
+            </div>
+            <button 
+              id="test-key-button" 
+              className="secondary-button"
+              onClick={handleTestConnection}
+              disabled={isLoading || isTestingConnection || !settings.apiKey.trim()}
+            >
+              {isTestingConnection ? 'Testing...' : 'Test Connection'}
+            </button>
+          </section>
+        )}
 
         <section className="settings-section">
           <h2>Default Settings</h2>

@@ -18,7 +18,9 @@
     "https://www.messenger.com/*",
     "https://chat.google.com/*",
     "https://meet.google.com/*",
-    "https://zoom.us/*"
+    "https://zoom.us/*",
+    "http://localhost:11434/*",
+    "http://127.0.0.1:11434/*"
   ],
   "background": {
     "service_worker": "background/service-worker.js"

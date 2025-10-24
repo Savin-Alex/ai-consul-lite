@@ -156,6 +156,82 @@ describe('LLM Service', () => {
       expect(result.success).toBe(false)
       expect(result.error).toContain('Unsupported provider')
     })
+
+    it('should get suggestions from Local LLM', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'Test suggestion 1\n---\nTest suggestion 2\n---\nTest suggestion 3'
+          }
+        }]
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse)
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'local'
+      )
+
+      expect(result.success).toBe(true)
+      expect(result.suggestions).toHaveLength(3)
+      expect(result.suggestions[0]).toBe('Test suggestion 1')
+      expect(result.suggestions[1]).toBe('Test suggestion 2')
+      expect(result.suggestions[2]).toBe('Test suggestion 3')
+    })
+
+    it('should handle Local LLM connection errors', async () => {
+      global.fetch.mockRejectedValueOnce(new Error('Failed to fetch'))
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'local'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Connection refused')
+    })
+
+    it('should handle Local LLM server not found', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        json: () => Promise.resolve({})
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'local'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Local LLM server (Ollama) not found')
+    })
+
+    it('should handle Local LLM model not found', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        statusText: 'Bad Request',
+        json: () => Promise.resolve({})
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'local'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Model not found')
+    })
   })
 
   describe('testApiKey', () => {
@@ -256,6 +332,43 @@ describe('LLM Service', () => {
       const result = await testApiKey('unsupported', 'test-key')
 
       expect(result.success).toBe(false)
+    })
+
+    it('should test Local LLM connection successfully', async () => {
+      const mockResponse = {
+        choices: [{
+          message: {
+            content: 'Test successful'
+          }
+        }]
+      }
+
+      global.fetch.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve(mockResponse)
+      })
+
+      const result = await testApiKey('local', null)
+
+      expect(result.success).toBe(true)
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:11434/v1/chat/completions',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json'
+          })
+        })
+      )
+    })
+
+    it('should handle Local LLM connection failure during testing', async () => {
+      global.fetch.mockRejectedValueOnce(new Error('Failed to fetch'))
+
+      const result = await testApiKey('local', null)
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('Connection refused')
     })
 
     it('should handle network errors during testing', async () => {

@@ -9,14 +9,19 @@ import { getKey, saveKey } from './storage.js'
  * Get AI reply suggestions from the specified LLM provider
  * @param {Array} context - Array of message objects with role and content
  * @param {string} tone - Tone for the response (formal, semi-formal, friendly, slang)
- * @param {string} provider - LLM provider (openai, anthropic, google)
+ * @param {string} provider - LLM provider (openai, anthropic, google, local)
  * @returns {Promise<{success: boolean, suggestions?: Array<string>, error?: string}>}
  */
 export async function getLLMSuggestions(context, tone, provider) {
   try {
-    const apiKey = await getKey(provider)
-    if (!apiKey) {
-      return { success: false, error: 'API key not found. Please configure your API key in the options page.' }
+    let apiKey // Will be undefined for 'local'
+
+    // Only get API key if it's not a local provider
+    if (provider !== 'local') {
+      apiKey = await getKey(provider)
+      if (!apiKey) {
+        return { success: false, error: 'API key not found. Please configure your API key in the options page.' }
+      }
     }
 
     const systemPrompt = `You are a helpful assistant. Provide 2-3 short reply suggestions to the last message in a ${tone} tone. Each suggestion should be concise (1-2 sentences max) and contextually appropriate. Separate each suggestion with '---'.`
@@ -31,6 +36,9 @@ export async function getLLMSuggestions(context, tone, provider) {
         break
       case 'google':
         suggestions = await callGoogle(context, systemPrompt, apiKey)
+        break
+      case 'local':
+        suggestions = await callLocalLLM(context, systemPrompt)
         break
       default:
         return { success: false, error: `Unsupported provider: ${provider}` }
@@ -230,6 +238,66 @@ async function callGoogle(context, systemPrompt, apiKey) {
 }
 
 /**
+ * Call Local LLM (Ollama) API
+ * @param {Array} context - Array of message objects with role and content
+ * @param {string} systemPrompt - System prompt for the LLM
+ * @returns {Promise<{success: boolean, data?: string, error?: string}>}
+ */
+async function callLocalLLM(context, systemPrompt) {
+  try {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...context
+    ]
+
+    const response = await fetch('http://localhost:11434/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+        // No 'Authorization' header needed for local Ollama
+      },
+      body: JSON.stringify({
+        model: 'llama3:8b', // Default model - users can change this
+        messages: messages,
+        max_tokens: 300,
+        temperature: 0.7,
+        stream: false // Ensure streaming is off
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      let errorMessage = `Local LLM API error (HTTP ${response.status})`
+      
+      if (response.status === 404) {
+        errorMessage = 'Local LLM server (Ollama) not found at http://localhost:11434. Is it running?'
+      } else if (response.status === 400) {
+        errorMessage = 'Model not found. Try running: ollama pull llama3:8b'
+      } else if (errorData.error?.message) {
+        errorMessage = errorData.error.message
+      }
+      
+      return { success: false, error: errorMessage }
+    }
+
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content
+
+    if (!content) {
+      return { success: false, error: 'No response content received from Local LLM' }
+    }
+
+    return { success: true, data: content }
+  } catch (error) {
+    // This catch block will trigger if the server isn't running at all
+    if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+      return { success: false, error: 'Connection refused. Is your local LLM server (Ollama) running at http://localhost:11434?' }
+    }
+    return { success: false, error: `Local LLM Network error: ${error.message}` }
+  }
+}
+
+/**
  * Test API key validity - IMPROVED VERSION
  * @param {string} provider - Provider to test
  * @param {string} apiKey - API key to test
@@ -251,6 +319,9 @@ export async function testApiKey(provider, apiKeyToTest) {
         break
       case 'google':
         result = await callGoogle(testContext, systemPrompt, apiKeyToTest)
+        break
+      case 'local':
+        result = await callLocalLLM(testContext, systemPrompt)
         break
       default:
         return { success: false, error: `Unsupported provider: ${provider}` }

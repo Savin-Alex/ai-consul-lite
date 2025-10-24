@@ -104,6 +104,57 @@ main {
   color: #6c757d;
 }
 
+.info-box {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 16px 0;
+}
+
+.info-box h3 {
+  color: #4688F1;
+  margin-bottom: 12px;
+  font-size: 16px;
+}
+
+.info-box h4 {
+  color: #333;
+  margin: 16px 0 8px 0;
+  font-size: 14px;
+}
+
+.info-box p {
+  margin-bottom: 12px;
+  color: #555;
+}
+
+.info-box ul, .info-box ol {
+  margin: 8px 0 12px 20px;
+  color: #555;
+}
+
+.info-box li {
+  margin-bottom: 4px;
+}
+
+.info-box code {
+  background: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+  font-size: 12px;
+}
+
+.info-box a {
+  color: #4688F1;
+  text-decoration: none;
+}
+
+.info-box a:hover {
+  text-decoration: underline;
+}
+
 .checkbox-label {
   display: flex;
   align-items: center;
