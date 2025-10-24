@@ -72,8 +72,8 @@ export default defineConfig({
         'content/content-selector-discovery': resolve(__dirname, 'src/content/content-selector-discovery.js'),
         'content/content-whatsapp-test': resolve(__dirname, 'src/content/content-whatsapp-test.js'),
         'content/content-whatsapp-simple': resolve(__dirname, 'src/content/content-whatsapp-simple.js'),
-        'popup/popup': resolve(__dirname, 'src/popup/popup-test.jsx'),
-        'options/options': resolve(__dirname, 'src/options/options-test.jsx'),
+        'popup/popup': resolve(__dirname, 'src/popup/popup-entry.jsx'),
+        'options/options': resolve(__dirname, 'src/options/options-entry.jsx'),
         'ui/main': resolve(__dirname, 'src/ui/index.jsx')
       },
       output: {
