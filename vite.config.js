@@ -52,6 +52,8 @@ export default defineConfig({
               let content = readFileSync(filePath, 'utf8')
               // Remove the import statement for _commonjsHelpers.js
               content = content.replace(/import[^;]*_commonjsHelpers\.js[^;]*;/g, '')
+              // Fix all ef function usage by replacing it with direct assignment
+              content = content.replace(/ef\(/g, '(')
               writeFileSync(filePath, content)
               console.log(`✅ Cleaned imports from ${filePath}`)
             }
