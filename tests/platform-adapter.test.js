@@ -17,7 +17,7 @@ describe('Platform Adapter', () => {
       const adapter = getAdapter('web.whatsapp.com')
       expect(adapter).toBeDefined()
       expect(adapter.name).toBe('WhatsApp')
-      expect(adapter.inputSelector).toContain('lexical-rich-text-input')
+      expect(adapter.inputSelector).toContain('contenteditable="true"')
     })
 
     it('should return Telegram adapter for web.telegram.org', () => {
@@ -72,7 +72,7 @@ describe('Platform Adapter', () => {
     })
 
     it('should have correct selectors', () => {
-      expect(adapter.inputSelector).toBe('.lexical-rich-text-input div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"])')
+      expect(adapter.inputSelector).toBe('div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])')
       expect(adapter.messageSelector).toBe('div[class*="x1c4vz4f"]')
     })
 
