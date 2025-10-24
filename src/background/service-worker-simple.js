@@ -86,7 +86,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 /**
  * Handle messages from content scripts and offscreen document
  */
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
   if (msg.type === 'GET_SUGGESTIONS') {
     handleGetSuggestions(msg, sendResponse)
     return true
@@ -106,6 +106,27 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     console.log('Transcription:', msg.transcript)
     // Save transcript for context merging
     saveRecentTranscript(msg.transcript)
+    
+    // Send live transcript to content script
+    try {
+      // Find the active tab that initiated the capture
+      const tabs = await chrome.tabs.query({ active: true, currentWindow: true })
+      if (tabs.length > 0) {
+        const activeTab = tabs[0]
+        console.log('Sending live transcript to tab:', activeTab.id)
+        
+        chrome.tabs.sendMessage(activeTab.id, {
+          type: 'LIVE_TRANSCRIPT_UPDATE',
+          transcript: msg.transcript,
+          timestamp: Date.now()
+        }).catch(error => {
+          console.log('Could not send transcript to content script:', error.message)
+          // This is expected if the content script isn't loaded or the page doesn't support it
+        })
+      }
+    } catch (error) {
+      console.error('Error sending transcript to content script:', error)
+    }
   }
   
   if (msg.type === 'CAPTURE_ERROR') {

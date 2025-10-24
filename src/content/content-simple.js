@@ -133,6 +133,37 @@ function mountReplyPanel(shadowRoot, props) {
         ">×</button>
       </div>
       
+      <!-- Live Transcript Section -->
+      <div id="transcript-section" style="
+        margin-bottom: 20px;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 8px;
+        border: 1px solid #e9ecef;
+        display: none;
+      ">
+        <div style="display: flex; align-items: center; margin-bottom: 8px;">
+          <span style="
+            background: #4688F1;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+            margin-right: 8px;
+          ">🎤 LIVE</span>
+          <span style="font-size: 12px; color: #666;">Voice Transcription</span>
+        </div>
+        <div id="transcript-text" style="
+          font-size: 14px;
+          line-height: 1.4;
+          color: #333;
+          min-height: 20px;
+          font-style: italic;
+          color: #666;
+        ">No live transcription yet...</div>
+      </div>
+      
       <div style="margin-bottom: 20px;">
         <label style="display: block; margin-bottom: 8px; font-weight: 500; color: #555;">Tone:</label>
         <select id="tone-select" style="
@@ -182,8 +213,25 @@ function mountReplyPanel(shadowRoot, props) {
   const closeBtn = shadowRoot.getElementById('close-btn')
   const generateBtn = shadowRoot.getElementById('generate-btn')
   const suggestionsDiv = shadowRoot.getElementById('suggestions')
+  const transcriptSection = shadowRoot.getElementById('transcript-section')
+  const transcriptText = shadowRoot.getElementById('transcript-text')
   
-  closeBtn.addEventListener('click', onClose)
+  closeBtn.addEventListener('click', () => {
+    clearTranscriptUpdateCallback()
+    onClose()
+  })
+  
+  // Set up transcript update callback
+  setTranscriptUpdateCallback((transcript) => {
+    if (transcript && transcript.trim()) {
+      transcriptSection.style.display = 'block'
+      transcriptText.textContent = transcript
+      transcriptText.style.fontStyle = 'normal'
+      transcriptText.style.color = '#333'
+    } else {
+      transcriptSection.style.display = 'none'
+    }
+  })
   
   generateBtn.addEventListener('click', async () => {
     generateBtn.textContent = 'Generating...'
@@ -776,6 +824,55 @@ function insertText(text) {
   
   return currentAdapter.insertText(inputField, text)
 }
+
+// Live transcript state
+let liveTranscript = ''
+let transcriptUpdateCallback = null
+
+/**
+ * Update the live transcript display
+ */
+function updateTranscriptUI(transcript) {
+  console.log('🎤 Live transcript update:', transcript)
+  liveTranscript = transcript
+  
+  // If we have a callback (UI is open), call it
+  if (transcriptUpdateCallback) {
+    transcriptUpdateCallback(transcript)
+  }
+}
+
+/**
+ * Set the transcript update callback (called when UI opens)
+ */
+function setTranscriptUpdateCallback(callback) {
+  transcriptUpdateCallback = callback
+  // Immediately call with current transcript if available
+  if (liveTranscript && callback) {
+    callback(liveTranscript)
+  }
+}
+
+/**
+ * Clear the transcript update callback (called when UI closes)
+ */
+function clearTranscriptUpdateCallback() {
+  transcriptUpdateCallback = null
+}
+
+// Listen for messages from service worker
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log('📨 Content script received message:', msg)
+  
+  if (msg.type === 'LIVE_TRANSCRIPT_UPDATE') {
+    console.log('🎤 Received live transcript:', msg.transcript)
+    updateTranscriptUI(msg.transcript)
+    sendResponse({ success: true })
+    return true // Keep message channel open for async response
+  }
+  
+  return false
+})
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
