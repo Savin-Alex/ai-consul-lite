@@ -308,7 +308,8 @@ describe('Storage Functions', () => {
         recentTranscripts: oldTranscripts
       })
       
-      const transcripts = await getRecentTranscripts()
+      // Use maxAge of 20 minutes (20 * 60 * 1000 ms)
+      const transcripts = await getRecentTranscripts(20 * 60 * 1000)
       
       expect(transcripts).toHaveLength(1)
       expect(transcripts[0].transcript).toBe('Recent transcript')
