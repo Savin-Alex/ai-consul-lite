@@ -158,3 +158,40 @@ chrome.runtime.onMessage.addListener((msg) => {
     stopCapture()
   }
 })
+
+// --- SERVICE WORKER KEEP-ALIVE ---
+// Send a message every 20 seconds to keep the service worker active
+// while the offscreen document is open (i.e., while capturing)
+let keepAliveInterval = null
+
+function startKeepAlive() {
+  if (keepAliveInterval) return // Already running
+  
+  console.log('🔄 Starting service worker keep-alive...')
+  keepAliveInterval = setInterval(() => {
+    chrome.runtime.sendMessage({ type: 'KEEP_ALIVE' })
+    console.log('💓 Keep-alive ping sent')
+  }, 20000) // Every 20 seconds
+}
+
+function stopKeepAlive() {
+  if (keepAliveInterval) {
+    console.log('⏹️ Stopping service worker keep-alive...')
+    clearInterval(keepAliveInterval)
+    keepAliveInterval = null
+  }
+}
+
+// Start keep-alive when capture starts
+const originalStartCapture = startCapture
+startCapture = async function(streamId) {
+  await originalStartCapture(streamId)
+  startKeepAlive()
+}
+
+// Stop keep-alive when capture stops
+const originalStopCapture = stopCapture
+stopCapture = function() {
+  originalStopCapture()
+  stopKeepAlive()
+}

@@ -9,17 +9,35 @@ function getAdapter(hostname) {
   const adapters = {
     'web.whatsapp.com': {
       name: 'WhatsApp',
-      inputSelector: 'div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])',
-      messageSelector: 'div[class*="x1c4vz4f"]',
+      // Hybrid approach: Try data-testid first, fallback to contenteditable
+      inputSelector: 'div[data-testid="conversation-compose-box-input"], div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])',
+      // Updated: Use class-based selector for WhatsApp message containers
+      messageSelector: 'div.message-in, div.message-out',
       getMessageText: (element) => {
-        const textElement = element.querySelector('[data-testid="msg-container"] span[dir="ltr"]') ||
+        // This selector should now correctly find the text within the "msg-container"
+        const textElement = element.querySelector('.copyable-text > span') ||
+                           element.querySelector('[data-testid="msg-text"]') ||
                            element.querySelector('span[dir="ltr"]') ||
                            element.querySelector('.selectable-text')
-        return textElement ? textElement.textContent.trim() : ''
+        
+        if (textElement) {
+          const text = textElement.textContent?.trim()
+          if (text && text.length > 2 && text.length < 1000) {
+            return text
+          }
+        }
+        
+        // Fallback: get text content directly from the element
+        const text = element.textContent?.trim()
+        if (text && text.length > 2 && text.length < 1000) {
+          return text
+        }
+        
+        return ''
       },
       getMessageRole: (element) => {
-        const isOutgoing = element.querySelector('[data-testid="msg-container"]')?.getAttribute('data-testid')?.includes('outgoing') ||
-                          element.classList.toString().includes('outgoing')
+        // Check if the message container is outgoing based on class
+        const isOutgoing = element.classList.contains('message-out')
         return isOutgoing ? 'user' : 'assistant'
       },
       insertText: (inputField, text) => {
@@ -743,23 +761,8 @@ function toggleReplyPanel() {
     document.body.appendChild(shadowHost)
     console.log('✅ Shadow host added to page')
 
-    // Add click outside to close (no backdrop)
-    console.log('🖱️ Setting up click outside handler...')
-    const handleClickOutside = (event) => {
-      console.log('🖱️ Click outside detected:', event.target)
-      if (replyPanel && !shadowHost.contains(event.target)) {
-        console.log('🚪 Closing panel due to outside click')
-        replyPanel.remove()
-        replyPanel = null
-        document.removeEventListener('click', handleClickOutside)
-      }
-    }
-    
-    // Add listener after a short delay to prevent immediate closure
-    setTimeout(() => {
-      console.log('⏰ Adding click outside listener')
-      document.addEventListener('click', handleClickOutside)
-    }, 100)
+    // Disable click outside for now - only close via close button
+    console.log('🖱️ Click outside detection disabled for debugging')
     
     console.log('✅ toggleReplyPanel finished successfully')
     
@@ -796,10 +799,19 @@ async function handleGenerateSuggestions() {
     const allMessages = document.querySelectorAll(currentAdapter?.messageSelector || 'div')
     console.log('📊 Total elements found with selector:', allMessages.length)
     
+    // Debug: Show what messages we found
+    if (allMessages.length > 0) {
+      console.log('🔍 First few message elements:', Array.from(allMessages).slice(0, 3).map(el => ({
+        text: el.textContent?.trim().substring(0, 50),
+        className: el.className,
+        testId: el.getAttribute('data-testid')
+      })))
+    }
+    
     // Get tone and provider from storage
-    const settings = await chrome.storage.sync.get(['defaultTone', 'provider'])
+    const settings = await chrome.storage.sync.get(['defaultTone', 'defaultProvider'])
     const selectedTone = settings.defaultTone || 'professional'
-    const provider = settings.provider || 'openai'
+    const provider = settings.defaultProvider || 'openai'
     
     console.log('⚙️ Settings:', { selectedTone, provider })
     
@@ -829,6 +841,10 @@ async function handleGenerateSuggestions() {
     })
     
     console.log('✅ Suggestions received:', response)
+    console.log('🔍 Response type:', typeof response)
+    console.log('🔍 Response.suggestions:', response?.suggestions)
+    console.log('🔍 Response.success:', response?.success)
+    console.log('🔍 Response.error:', response?.error)
     return response.suggestions || ['No suggestions available']
     
   } catch (error) {

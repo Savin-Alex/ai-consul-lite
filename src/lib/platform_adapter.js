@@ -32,25 +32,30 @@ export function getAdapter(hostname) {
 // WhatsApp Web Adapter - Updated for current WhatsApp Web structure
 const whatsappAdapter = {
   name: 'WhatsApp',
-  // Updated: More comprehensive selector for WhatsApp input field
-  inputSelector: 'div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])',
-  // Updated: Use a broader selector for message elements since specific containers weren't found
-  messageSelector: 'div[class*="x1c4vz4f"]', // Based on discovered message div classes
+  // Hybrid approach: Try data-testid first, fallback to contenteditable
+  inputSelector: 'div[data-testid="conversation-compose-box-input"], div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])',
+  // Updated: Use class-based selector for WhatsApp message containers
+  messageSelector: 'div.message-in, div.message-out',
   
   getMessageText(node) {
-    // Try multiple approaches to get message text
-    const textElement = node.querySelector('[data-testid="msg-text"]') ||
-                       node.querySelector('.message-text') ||
-                       node.querySelector('[class*="text"]')
+    // This selector should now correctly find the text within the "msg-container"
+    const textElement = node.querySelector('.copyable-text > span') ||
+                       node.querySelector('[data-testid="msg-text"]') ||
+                       node.querySelector('span[dir="ltr"]') ||
+                       node.querySelector('.selectable-text')
     
     if (textElement) {
-      return textElement.textContent.trim()
+      const text = textElement.textContent?.trim()
+      // Filter out very short or very long text (likely not messages)
+      if (text && text.length > 2 && text.length < 1000) {
+        return text
+      }
     }
     
     // Fallback: get text content directly from the node
     const text = node.textContent?.trim()
     // Filter out very short or very long text (likely not messages)
-    if (text && text.length > 5 && text.length < 1000) {
+    if (text && text.length > 2 && text.length < 1000) {
       return text
     }
     
@@ -58,13 +63,8 @@ const whatsappAdapter = {
   },
   
   getMessageRole(node) {
-    // Check multiple patterns for outgoing messages
-    const isOutgoing = node.querySelector('[data-testid="msg-out"]') ||
-                       node.classList.contains('message-out') ||
-                       node.classList.contains('sent') ||
-                       node.classList.contains('outgoing') ||
-                       node.querySelector('[class*="out"]') ||
-                       node.querySelector('[class*="sent"]')
+    // Check if the message container is outgoing based on class
+    const isOutgoing = node.classList.contains('message-out')
     
     return isOutgoing ? 'user' : 'assistant'
   },

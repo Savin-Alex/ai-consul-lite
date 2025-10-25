@@ -105,17 +105,48 @@ chrome.action.onClicked.addListener(async (tab) => {
 // Message router - handles messages from content scripts and offscreen document
 chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
   console.log('📨 Background script received message:', msg)
+  console.log('🔍 Message type:', msg.type)
+  console.log('📤 Sender:', sender)
+  console.log('🔍 sendResponse function:', typeof sendResponse)
   
   if (msg.type === 'GET_SUGGESTIONS') {
     console.log('🔄 Processing GET_SUGGESTIONS request:', msg)
+    console.log('📝 Message content:', JSON.stringify(msg, null, 2))
     // Handle LLM suggestion requests from content scripts
-    handleGetSuggestions(msg, sendResponse)
+    try {
+      await handleGetSuggestions(msg, sendResponse)
+      console.log('✅ handleGetSuggestions completed successfully')
+    } catch (error) {
+      console.error('❌ Error in handleGetSuggestions:', error)
+      console.error('❌ Error stack:', error.stack)
+      // Ensure we always send a response
+      try {
+        sendResponse({
+          type: 'SUGGESTIONS_READY',
+          success: false,
+          suggestions: ['Error generating suggestions. Please try again.'],
+          error: error.message
+        })
+        console.log('✅ Fallback error response sent')
+      } catch (sendError) {
+        console.error('❌ Failed to send error response:', sendError)
+      }
+    }
     return true // Indicate async response
   }
   
   if (msg.type === 'PING') {
     console.log('🏓 Received PING, sending PONG')
-    sendResponse({ type: 'PONG', message: 'Service worker is active' })
+    const pongResponse = { type: 'PONG', message: 'Service worker is active' }
+    console.log('📤 Sending PONG:', pongResponse)
+    sendResponse(pongResponse)
+    return true
+  }
+  
+  if (msg.type === 'KEEP_ALIVE') {
+    console.log('💓 Keep-alive ping received')
+    // Just receiving the message is enough to reset the timer
+    sendResponse(true) // Acknowledge
     return true
   }
   
@@ -157,33 +188,365 @@ chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
  * Handle LLM suggestion requests
  */
 async function handleGetSuggestions(msg, sendResponse) {
+  let responseSent = false
+  
+  // Set a timeout to ensure we always respond
+  const timeout = setTimeout(() => {
+    if (!responseSent) {
+      console.log('⏰ Timeout reached, sending fallback response')
+      responseSent = true
+      sendResponse({
+        type: 'SUGGESTIONS_READY',
+        success: false,
+        suggestions: ['Request timed out. Please try again.'],
+        error: 'Request timeout'
+      })
+    }
+  }, 10000) // 10 second timeout
+  
   try {
     console.log('🔍 handleGetSuggestions called with:', msg)
     const { context, tone, provider } = msg
     console.log('📝 Extracted parameters:', { context, tone, provider })
     
-    // For now, return a simple response to test the connection
-    const response = {
+    console.log('🚀 About to call getLLMSuggestions...')
+    // Call the real LLM service
+    const result = await getLLMSuggestions(context, tone, provider)
+    console.log('✅ getLLMSuggestions completed:', result)
+    
+    if (!responseSent) {
+      const response = {
       type: 'SUGGESTIONS_READY',
-      success: true,
-      suggestions: [
-        `Here's a ${tone} response to your message.`,
-        `Another ${tone} suggestion for you.`,
-        `A third ${tone} option to consider.`
-      ],
-      error: null
+      success: result.success,
+      suggestions: result.suggestions,
+      error: result.error
+      }
+      console.log('📤 Sending response:', response)
+      console.log('📤 Response type:', typeof response)
+      console.log('📤 Response.suggestions:', response.suggestions)
+      responseSent = true
+      sendResponse(response)
+      console.log('✅ sendResponse called successfully')
     }
-    console.log('📤 Sending response:', response)
-    sendResponse(response)
   } catch (error) {
     console.error('❌ Error handling suggestions request:', error)
-    const errorResponse = {
+    console.error('❌ Error stack:', error.stack)
+    
+    if (!responseSent) {
+      const errorResponse = {
       type: 'SUGGESTIONS_READY',
       success: false,
+        suggestions: ['Error generating suggestions. Please try again.'],
       error: error.message
+      }
+      console.log('📤 Sending error response:', errorResponse)
+      responseSent = true
+      sendResponse(errorResponse)
+      console.log('✅ Error sendResponse called successfully')
     }
-    console.log('📤 Sending error response:', errorResponse)
-    sendResponse(errorResponse)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+// Inlined LLM Service Functions
+async function getLLMSuggestions(context, tone, provider) {
+  try {
+    let apiKey // Will be undefined for 'local'
+
+    // Only get API key if it's not a local provider
+    if (provider !== 'local') {
+      apiKey = await getKey(provider)
+      if (!apiKey) {
+        return { success: false, error: 'API key not found. Please configure your API key in the options page.' }
+      }
+    }
+
+    const systemPrompt = `You are a helpful assistant. Provide 2-3 short reply suggestions to the last message in a ${tone} tone. Each suggestion should be concise (1-2 sentences max) and contextually appropriate. Separate each suggestion with '---'.`
+
+    let suggestions
+    switch (provider.toLowerCase()) {
+      case 'openai':
+        suggestions = await callOpenAI(context, systemPrompt, apiKey)
+        break
+      case 'anthropic':
+        suggestions = await callAnthropic(context, systemPrompt, apiKey)
+        break
+      case 'google':
+        suggestions = await callGoogle(context, systemPrompt, apiKey)
+        break
+      case 'local':
+        suggestions = await callLocalLLM(context, systemPrompt)
+        break
+      default:
+        return { success: false, error: `Unsupported provider: ${provider}` }
+    }
+
+    if (suggestions.success) {
+      // Parse suggestions by splitting on '---'
+      const parsedSuggestions = suggestions.data
+        .split('---')
+        .map(s => s.trim())
+        .filter(s => s.length > 0)
+        .slice(0, 3) // Ensure max 3 suggestions
+
+      return { success: true, suggestions: parsedSuggestions }
+    } else {
+      return { success: false, error: suggestions.error }
+    }
+  } catch (error) {
+    console.error('LLM service error:', error)
+    return { success: false, error: `Unexpected error: ${error.message}` }
+  }
+}
+
+// Inlined Storage Functions
+async function getKey(provider) {
+  try {
+    const result = await chrome.storage.local.get(`api_key_${provider}`)
+    return result[`api_key_${provider}`] || null
+  } catch (error) {
+    console.error('Failed to get API key:', error)
+    return null
+  }
+}
+
+// Inlined LLM API Functions
+async function callOpenAI(context, systemPrompt, apiKey) {
+  try {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...context
+    ]
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o',
+        messages: messages,
+        max_tokens: 300,
+        temperature: 0.7
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      let errorMessage = `OpenAI API error (${response.status})`
+      
+      if (response.status === 401) {
+        errorMessage = 'Invalid API key. Please check your OpenAI API key.'
+      } else if (response.status === 429) {
+        errorMessage = 'Rate limit exceeded. Please try again later.'
+      } else if (errorData.error?.message) {
+        errorMessage = errorData.error.message
+      }
+      
+      return { success: false, error: errorMessage }
+    }
+
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content
+
+    if (!content) {
+      return { success: false, error: 'No response content received from OpenAI' }
+    }
+
+    return { success: true, data: content }
+  } catch (error) {
+    return { success: false, error: `Network error: ${error.message}` }
+  }
+}
+
+async function callAnthropic(context, systemPrompt, apiKey) {
+  try {
+    const messages = context.map(msg => ({
+      role: msg.role === 'assistant' ? 'assistant' : 'user',
+      content: msg.content
+    }))
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'Content-Type': 'application/json',
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 300,
+        system: systemPrompt,
+        messages: messages
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      let errorMessage = `Anthropic API error (${response.status})`
+      
+      if (response.status === 401) {
+        errorMessage = 'Invalid API key. Please check your Anthropic API key.'
+      } else if (response.status === 429) {
+        errorMessage = 'Rate limit exceeded. Please try again later.'
+      } else if (errorData.error?.message) {
+        errorMessage = errorData.error.message
+      }
+      
+      return { success: false, error: errorMessage }
+    }
+
+    const data = await response.json()
+    const content = data.content?.[0]?.text
+
+    if (!content) {
+      return { success: false, error: 'No response content received from Anthropic' }
+    }
+
+    return { success: true, data: content }
+  } catch (error) {
+    return { success: false, error: `Network error: ${error.message}` }
+  }
+}
+
+async function callGoogle(context, systemPrompt, apiKey) {
+  try {
+    // Gemini requires alternating user/model roles
+    const contents = []
+    
+    // Add system instructions if provided
+    if (systemPrompt) {
+      contents.push({ role: "user", parts: [{ text: systemPrompt }] })
+      contents.push({ role: "model", parts: [{ text: "Okay, I understand the instructions." }] })
+    }
+
+    // Add conversation history
+    context.forEach(msg => {
+      contents.push({
+        role: msg.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: msg.content }]
+      })
+    })
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        contents: contents,
+        generationConfig: {
+          maxOutputTokens: 300,
+          temperature: 0.7
+        }
+      })
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      let errorMessage = `Google API error (${response.status})`
+      
+      if (response.status === 400) {
+        errorMessage = 'Invalid API key. Please check your Google AI API key.'
+      } else if (response.status === 429) {
+        errorMessage = 'Rate limit exceeded. Please try again later.'
+      } else if (errorData.error?.message) {
+        errorMessage = errorData.error.message
+      }
+      
+      return { success: false, error: errorMessage }
+    }
+
+    const data = await response.json()
+    
+    // Handle potential safety blocks
+    if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+      return { success: false, error: 'Google API blocked the response due to safety settings.' }
+    }
+    
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text
+
+    if (!content) {
+      return { success: false, error: 'No response content received from Google Gemini' }
+    }
+
+    return { success: true, data: content }
+  } catch (error) {
+    return { success: false, error: `Google API Network error: ${error.message}` }
+  }
+}
+
+async function callLocalLLM(context, systemPrompt) {
+  try {
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...context
+    ]
+
+    console.log('🌐 Making request to Ollama API...')
+    console.log('📝 Request payload:', JSON.stringify({
+      model: 'llama3:latest',
+      messages: messages,
+      max_tokens: 300,
+      temperature: 0.7,
+      stream: false
+    }, null, 2))
+    
+    const response = await fetch('http://localhost:11434/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+        // No 'Authorization' header needed for local Ollama
+      },
+      mode: 'cors', // Explicitly set CORS mode
+      body: JSON.stringify({
+        model: 'llama3:latest', // Use llama3:latest instead of llama3:8b
+        messages: messages,
+        max_tokens: 300,
+        temperature: 0.7,
+        stream: false // Ensure streaming is off
+      })
+    })
+    
+    console.log('📡 Response status:', response.status)
+    console.log('📡 Response ok:', response.ok)
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      let errorMessage = `Local LLM API error (HTTP ${response.status})`
+      
+      if (response.status === 403) {
+        errorMessage = 'Ollama blocked the request due to CORS. Try: OLLAMA_ORIGINS="*" ollama serve'
+      } else if (response.status === 404) {
+        errorMessage = 'Model not found. Try running: ollama pull llama3:latest'
+      } else if (response.status === 400) {
+        errorMessage = 'Model not found. Try running: ollama pull llama3:latest'
+      } else if (errorData.error?.message) {
+        errorMessage = errorData.error.message
+      }
+      
+      return { success: false, error: errorMessage }
+    }
+
+    const data = await response.json()
+    const content = data.choices?.[0]?.message?.content
+
+    if (!content) {
+      return { success: false, error: 'No response content received from Local LLM' }
+    }
+
+    return { success: true, data: content }
+  } catch (error) {
+    // This catch block will trigger if the server isn't running at all
+    if (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED')) {
+      return { success: false, error: 'Connection refused. Is your local LLM server (Ollama) running at http://localhost:11434?' }
+    }
+    if (error.message.includes('CORS') || error.message.includes('cors')) {
+      return { success: false, error: 'CORS error. Try: OLLAMA_ORIGINS="*" ollama serve' }
+    }
+    return { success: false, error: `Local LLM Network error: ${error.message}` }
   }
 }
 
