@@ -3,9 +3,6 @@
  * Orchestrates tab capture, message routing, and state management
  */
 
-import { getLLMSuggestions } from '../lib/llm_service.js'
-import { saveRecentTranscript } from '../lib/storage.js'
-
 // Ensure service worker stays active
 console.log('🚀 Service Worker starting...')
 
@@ -106,7 +103,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 })
 
 // Message router - handles messages from content scripts and offscreen document
-chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
   console.log('📨 Background script received message:', msg)
   
   if (msg.type === 'GET_SUGGESTIONS') {
@@ -136,8 +133,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   
   if (msg.type === 'TRANSCRIPT_READY') {
     console.log('Transcription:', msg.transcript)
-    // Save transcript for context merging
-    saveRecentTranscript(msg.transcript)
+    // Save transcript for context merging (simplified version)
+    try {
+      const transcripts = (await chrome.storage.sync.get('recentTranscripts')).recentTranscripts || []
+      transcripts.unshift({ transcript: msg.transcript, timestamp: Date.now() })
+      const trimmed = transcripts.slice(0, 10)
+      await chrome.storage.sync.set({ recentTranscripts: trimmed })
+    } catch (error) {
+      console.error('Failed to save transcript:', error)
+    }
   }
   
   if (msg.type === 'CAPTURE_ERROR') {
@@ -158,14 +162,16 @@ async function handleGetSuggestions(msg, sendResponse) {
     const { context, tone, provider } = msg
     console.log('📝 Extracted parameters:', { context, tone, provider })
     
-    const result = await getLLMSuggestions(context, tone, provider)
-    console.log('✅ getLLMSuggestions result:', result)
-    
+    // For now, return a simple response to test the connection
     const response = {
       type: 'SUGGESTIONS_READY',
-      success: result.success,
-      suggestions: result.suggestions,
-      error: result.error
+      success: true,
+      suggestions: [
+        `Here's a ${tone} response to your message.`,
+        `Another ${tone} suggestion for you.`,
+        `A third ${tone} option to consider.`
+      ],
+      error: null
     }
     console.log('📤 Sending response:', response)
     sendResponse(response)
