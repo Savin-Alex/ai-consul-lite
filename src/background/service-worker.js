@@ -6,6 +6,18 @@
 import { getLLMSuggestions } from '../lib/llm_service.js'
 import { saveRecentTranscript } from '../lib/storage.js'
 
+// Ensure service worker stays active
+console.log('🚀 Service Worker starting...')
+
+// Keep service worker alive by responding to any message
+chrome.runtime.onStartup.addListener(() => {
+  console.log('🔄 Service Worker started on browser startup')
+})
+
+chrome.runtime.onInstalled.addListener(() => {
+  console.log('📦 Service Worker installed/updated')
+})
+
 // Track capturing tabs for lifecycle management
 const capturingTabs = new Set()
 
@@ -95,10 +107,19 @@ chrome.action.onClicked.addListener(async (tab) => {
 
 // Message router - handles messages from content scripts and offscreen document
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+  console.log('📨 Background script received message:', msg)
+  
   if (msg.type === 'GET_SUGGESTIONS') {
+    console.log('🔄 Processing GET_SUGGESTIONS request:', msg)
     // Handle LLM suggestion requests from content scripts
     handleGetSuggestions(msg, sendResponse)
     return true // Indicate async response
+  }
+  
+  if (msg.type === 'PING') {
+    console.log('🏓 Received PING, sending PONG')
+    sendResponse({ type: 'PONG', message: 'Service worker is active' })
+    return true
   }
   
   if (msg.type === 'CAPTURE_STARTED') {
@@ -133,22 +154,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
  */
 async function handleGetSuggestions(msg, sendResponse) {
   try {
+    console.log('🔍 handleGetSuggestions called with:', msg)
     const { context, tone, provider } = msg
-    const result = await getLLMSuggestions(context, tone, provider)
+    console.log('📝 Extracted parameters:', { context, tone, provider })
     
-    sendResponse({
+    const result = await getLLMSuggestions(context, tone, provider)
+    console.log('✅ getLLMSuggestions result:', result)
+    
+    const response = {
       type: 'SUGGESTIONS_READY',
       success: result.success,
       suggestions: result.suggestions,
       error: result.error
-    })
+    }
+    console.log('📤 Sending response:', response)
+    sendResponse(response)
   } catch (error) {
-    console.error('Error handling suggestions request:', error)
-    sendResponse({
+    console.error('❌ Error handling suggestions request:', error)
+    const errorResponse = {
       type: 'SUGGESTIONS_READY',
       success: false,
       error: error.message
-    })
+    }
+    console.log('📤 Sending error response:', errorResponse)
+    sendResponse(errorResponse)
   }
 }
 

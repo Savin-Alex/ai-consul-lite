@@ -718,7 +718,7 @@ function toggleReplyPanel() {
 
     // Mount React UI
     console.log('⚛️ Mounting UI...')
-    replyPanel = shadowRoot
+    replyPanel = shadowHost  // Store the shadow host, not the shadow root
     
     try {
       mountReplyPanel(shadowRoot, {
@@ -789,16 +789,43 @@ async function handleGenerateSuggestions() {
     // Get recent messages for context
     const recentMessages = getRecentMessages(currentAdapter, 5)
     console.log('📝 Recent messages:', recentMessages)
+    console.log('🔍 Current adapter:', currentAdapter)
+    console.log('🎯 Message selector:', currentAdapter?.messageSelector)
     
-    // Get tone from storage
-    const tone = await chrome.storage.sync.get('defaultTone')
-    const selectedTone = tone.defaultTone || 'professional'
+    // Check if we can find any messages manually
+    const allMessages = document.querySelectorAll(currentAdapter?.messageSelector || 'div')
+    console.log('📊 Total elements found with selector:', allMessages.length)
+    
+    // Get tone and provider from storage
+    const settings = await chrome.storage.sync.get(['defaultTone', 'provider'])
+    const selectedTone = settings.defaultTone || 'professional'
+    const provider = settings.provider || 'openai'
+    
+    console.log('⚙️ Settings:', { selectedTone, provider })
     
     // Send message to background script
+    console.log('📤 Sending message to background script...')
+    
+    // First, test if service worker is responsive
+    try {
+      console.log('🏓 Testing service worker connectivity...')
+      const pingResponse = await chrome.runtime.sendMessage({ type: 'PING' })
+      console.log('🏓 Service worker response:', pingResponse)
+      
+      if (!pingResponse) {
+        console.error('❌ Service worker not responding to PING')
+        return ['Service worker not available. Please reload the extension.']
+      }
+    } catch (pingError) {
+      console.error('❌ Service worker not responding:', pingError)
+      return ['Service worker not available. Please reload the extension.']
+    }
+    
     const response = await chrome.runtime.sendMessage({
       type: 'GET_SUGGESTIONS',
-      messages: recentMessages,
-      tone: selectedTone
+      context: recentMessages,
+      tone: selectedTone,
+      provider: provider
     })
     
     console.log('✅ Suggestions received:', response)
