@@ -263,7 +263,17 @@ async function getLLMSuggestions(context, tone, provider) {
       }
     }
 
-    const systemPrompt = `You are a helpful assistant that generates short, conversational reply suggestions. Based on the conversation context, provide exactly 2-3 brief reply options (one per line, separated by '---') that are: 1) contextually appropriate, 2) in a ${tone} tone, and 3) concise (1-2 sentences max).`
+    const systemPrompt = `You are a reply suggestion assistant. Your task is to generate 3 short reply suggestions for the "user" to say in response to the last message from the "assistant".
+
+Follow these strict rules:
+1. LANGUAGE: Analyze the conversation. You MUST generate all suggestions in the *same language* as the last message in the context.
+2. ROLE: You are generating replies for the "user". The history shows messages from "user" (your past messages) and "assistant" (the other person's messages).
+3. TONE: Generate replies in a ${tone} tone.
+4. DIVERSITY: Provide exactly 3 suggestions with different intents:
+   - One (1) suggestion that AGREES with or is supportive of the last message.
+   - One (1) suggestion that DISAGREES with or opposes the last message.
+   - One (1) suggestion that is NEUTRAL or asks a clarifying question.
+5. FORMAT: Separate each suggestion *only* with "---". Keep each suggestion concise (1-2 sentences).`
 
     let suggestions
     switch (provider.toLowerCase()) {

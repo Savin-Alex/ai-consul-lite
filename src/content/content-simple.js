@@ -872,15 +872,21 @@ async function handleGenerateSuggestions() {
  * Insert text into the input field
  */
 function insertText(text) {
-  console.log('📝 Inserting text:', text)
+  console.log('📝 insertText function called with:', text)
+  console.log('📝 Current adapter:', currentAdapter)
   
   const inputField = document.querySelector(currentAdapter.inputSelector)
+  console.log('📝 Input field found:', inputField)
+  
   if (!inputField) {
     console.error('❌ No input field found for text insertion')
     return false
   }
   
-  return currentAdapter.insertText(inputField, text)
+  console.log('📝 Calling adapter.insertText...')
+  const result = currentAdapter.insertText(inputField, text)
+  console.log('📝 insertText result:', result)
+  return result
 }
 
 // Live transcript state
