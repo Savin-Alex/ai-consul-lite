@@ -66,7 +66,9 @@ const whatsappAdapter = {
     // Check if the message container is outgoing based on class
     const isOutgoing = node.classList.contains('message-out')
     
-    return isOutgoing ? 'user' : 'assistant'
+    // INVERTED: Your outgoing messages should be 'assistant' role
+    // Their incoming messages should be 'user' role
+    return isOutgoing ? 'assistant' : 'user'
   },
   
   insertText(text) {
@@ -105,7 +107,9 @@ const telegramAdapter = {
   },
   
   getMessageRole(node) {
-    return node.classList.contains('message-out') ? 'user' : 'assistant'
+    // INVERTED: Your outgoing messages should be 'assistant' role
+    // Their incoming messages should be 'user' role
+    return node.classList.contains('message-out') ? 'assistant' : 'user'
   },
   
   insertText(text) {
@@ -132,8 +136,9 @@ const slackAdapter = {
   },
   
   getMessageRole(node) {
-    // Slack messages have data-qa="message" for user messages
-    return node.querySelector('[data-qa="message"]') ? 'user' : 'assistant'
+    // INVERTED: Your outgoing messages should be 'assistant' role
+    // Their incoming messages should be 'user' role
+    return node.querySelector('[data-qa="message"]') ? 'assistant' : 'user'
   },
   
   insertText(text) {
@@ -158,7 +163,9 @@ const discordAdapter = {
   },
   
   getMessageRole(node) {
-    return node.classList.contains('message-2qnXI6') && node.querySelector('[class*="messageContent"]') ? 'user' : 'assistant'
+    // INVERTED: Your outgoing messages should be 'assistant' role
+    // Their incoming messages should be 'user' role
+    return node.classList.contains('message-2qnXI6') && node.querySelector('[class*="messageContent"]') ? 'assistant' : 'user'
   },
   
   insertText(text) {
@@ -183,7 +190,9 @@ const linkedinAdapter = {
   },
   
   getMessageRole(node) {
-    return node.classList.contains('message--sent') ? 'user' : 'assistant'
+    // INVERTED: Your outgoing messages should be 'assistant' role
+    // Their incoming messages should be 'user' role
+    return node.classList.contains('message--sent') ? 'assistant' : 'user'
   },
   
   insertText(text) {
@@ -208,7 +217,9 @@ const messengerAdapter = {
   },
   
   getMessageRole(node) {
-    return node.classList.contains('message--sent') ? 'user' : 'assistant'
+    // INVERTED: Your outgoing messages should be 'assistant' role
+    // Their incoming messages should be 'user' role
+    return node.classList.contains('message--sent') ? 'assistant' : 'user'
   },
   
   insertText(text) {
@@ -233,7 +244,9 @@ const googleChatAdapter = {
   },
   
   getMessageRole(node) {
-    return node.classList.contains('message--sent') ? 'user' : 'assistant'
+    // INVERTED: Your outgoing messages should be 'assistant' role
+    // Their incoming messages should be 'user' role
+    return node.classList.contains('message--sent') ? 'assistant' : 'user'
   },
   
   insertText(text) {

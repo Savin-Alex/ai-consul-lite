@@ -38,7 +38,9 @@ function getAdapter(hostname) {
       getMessageRole: (element) => {
         // Check if the message container is outgoing based on class
         const isOutgoing = element.classList.contains('message-out')
-        return isOutgoing ? 'user' : 'assistant'
+        // INVERTED: Your outgoing messages should be 'assistant' role
+        // Their incoming messages should be 'user' role
+        return isOutgoing ? 'assistant' : 'user'
       },
       insertText: (inputField, text) => {
         try {
@@ -73,7 +75,11 @@ function getAdapter(hostname) {
       inputSelector: '.input-message-container [contenteditable="true"]',
       messageSelector: '.message',
       getMessageText: (element) => element.textContent.trim(),
-      getMessageRole: (element) => element.classList.contains('message-out') ? 'user' : 'assistant',
+      getMessageRole: (element) => {
+        // INVERTED: Your outgoing messages should be 'assistant' role
+        // Their incoming messages should be 'user' role
+        return element.classList.contains('message-out') ? 'assistant' : 'user'
+      },
       insertText: (inputField, text) => {
         inputField.textContent = text
         inputField.dispatchEvent(new Event('input', { bubbles: true }))
@@ -85,7 +91,11 @@ function getAdapter(hostname) {
       inputSelector: '[data-qa="message_input"]',
       messageSelector: '[data-qa="message"]',
       getMessageText: (element) => element.textContent.trim(),
-      getMessageRole: (element) => element.classList.contains('c-message--sent') ? 'user' : 'assistant',
+      getMessageRole: (element) => {
+        // INVERTED: Your outgoing messages should be 'assistant' role
+        // Their incoming messages should be 'user' role
+        return element.classList.contains('c-message--sent') ? 'assistant' : 'user'
+      },
       insertText: (inputField, text) => {
         inputField.value = text
         inputField.dispatchEvent(new Event('input', { bubbles: true }))
