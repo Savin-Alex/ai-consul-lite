@@ -339,7 +339,7 @@ async function callOpenAI(context, systemPrompt, apiKey) {
       body: JSON.stringify({
         model: 'gpt-4o',
         messages: messages,
-        max_tokens: 300,
+        max_tokens: 500,
         temperature: 0.7
       })
     })
@@ -388,7 +388,7 @@ async function callAnthropic(context, systemPrompt, apiKey) {
       },
       body: JSON.stringify({
         model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 300,
+        max_tokens: 500,
         system: systemPrompt,
         messages: messages
       })
@@ -506,7 +506,7 @@ async function callLocalLLM(context, systemPrompt) {
     console.log('📝 Request payload:', JSON.stringify({
         model: 'llama3:latest',
         messages: messages,
-        max_tokens: 300,
+        max_tokens: 500,
         temperature: 0.9,
         stream: false
     }, null, 2))
@@ -521,7 +521,7 @@ async function callLocalLLM(context, systemPrompt) {
       body: JSON.stringify({
         model: 'llama3:latest', // Use llama3:latest instead of llama3:8b
         messages: messages,
-        max_tokens: 300,
+        max_tokens: 500,
         temperature: 0.9,
         stream: false // Ensure streaming is off
       })
