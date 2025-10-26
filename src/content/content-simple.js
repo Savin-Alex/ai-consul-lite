@@ -257,24 +257,33 @@ function mountReplyPanel(shadowRoot, props) {
     
     try {
       const suggestions = await onGenerate()
-      suggestionsDiv.innerHTML = suggestions.map(suggestion => `
-        <div style="
+      suggestionsDiv.innerHTML = suggestions.map((suggestion, index) => `
+        <div class="suggestion-item" style="
           margin-bottom: 12px;
           padding: 12px;
           background: white;
           border-radius: 6px;
           border: 1px solid #e0e0e0;
           cursor: pointer;
-        " data-suggestion="${suggestion}">
-          <p style="margin: 0; font-size: 14px; line-height: 1.4;">${suggestion}</p>
+          transition: all 0.2s;
+        " data-index="${index}">
+          <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #333333;">${suggestion}</p>
         </div>
       `).join('')
       
       // Add click listeners to suggestions
-      suggestionsDiv.querySelectorAll('[data-suggestion]').forEach(element => {
+      suggestionsDiv.querySelectorAll('.suggestion-item').forEach((element, index) => {
+        element.addEventListener('mouseenter', () => {
+          element.style.background = '#f5f5f5'
+          element.style.borderColor = '#007bff'
+        })
+        element.addEventListener('mouseleave', () => {
+          element.style.background = 'white'
+          element.style.borderColor = '#e0e0e0'
+        })
         element.addEventListener('click', () => {
-          const suggestion = element.getAttribute('data-suggestion')
-          onInsert(suggestion)
+          const suggestionText = suggestions[index]
+          onInsert(suggestionText)
           onClose()
         })
       })

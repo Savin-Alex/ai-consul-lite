@@ -103,7 +103,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 })
 
 // Message router - handles messages from content scripts and offscreen document
-chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   console.log('📨 Background script received message:', msg)
   console.log('🔍 Message type:', msg.type)
   console.log('📤 Sender:', sender)
@@ -153,15 +153,17 @@ chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
   
   if (msg.type === 'TRANSCRIPT_READY') {
     console.log('Transcription:', msg.transcript)
-    // Save transcript for context merging (simplified version)
-    try {
-      const transcripts = (await chrome.storage.sync.get('recentTranscripts')).recentTranscripts || []
-      transcripts.unshift({ transcript: msg.transcript, timestamp: Date.now() })
-      const trimmed = transcripts.slice(0, 10)
-      await chrome.storage.sync.set({ recentTranscripts: trimmed })
-    } catch (error) {
-      console.error('Failed to save transcript:', error)
-    }
+    // Save transcript for context merging (simplified version) - async, no response needed
+    ;(async () => {
+      try {
+        const transcripts = (await chrome.storage.sync.get('recentTranscripts')).recentTranscripts || []
+        transcripts.unshift({ transcript: msg.transcript, timestamp: Date.now() })
+        const trimmed = transcripts.slice(0, 10)
+        await chrome.storage.sync.set({ recentTranscripts: trimmed })
+      } catch (error) {
+        console.error('Failed to save transcript:', error)
+      }
+    })()
     return false
   }
   
