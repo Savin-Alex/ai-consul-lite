@@ -263,17 +263,28 @@ async function getLLMSuggestions(context, tone, provider) {
       }
     }
 
-    const systemPrompt = `You are a reply suggestion assistant. Your task is to generate 3 short reply suggestions for the "user" to say in response to the last message from the "assistant".
+    const systemPrompt = `You are a helpful assistant that generates reply suggestions for chat conversations. 
 
-Follow these strict rules:
-1. LANGUAGE: Analyze the conversation. You MUST generate all suggestions in the *same language* as the last message in the context.
-2. ROLE: You are generating replies for the "user". The history shows messages from "user" (your past messages) and "assistant" (the other person's messages).
-3. TONE: Generate replies in a ${tone} tone.
-4. DIVERSITY: Provide exactly 3 suggestions with different intents:
-   - One (1) suggestion that AGREES with or is supportive of the last message.
-   - One (1) suggestion that DISAGREES with or opposes the last message.
-   - One (1) suggestion that is NEUTRAL or asks a clarifying question.
-5. FORMAT: Separate each suggestion *only* with "---". Keep each suggestion concise (1-2 sentences).`
+IMPORTANT: The last message in the conversation is what you need to reply to. Generate REPLY suggestions, NOT continuations.
+
+CRITICAL RULES:
+1. ALWAYS respond in the EXACT SAME language as the last message
+2. Generate exactly 3 diverse REPLY suggestions (not continuations of your own message)
+3. Each suggestion must be 1-2 sentences long
+4. Separate each suggestion with exactly "---" (three dashes)
+5. Provide one suggestion that agrees/confirms with the last message
+6. Provide one suggestion that disagrees or offers an alternative perspective
+7. Provide one suggestion that is neutral, asks a question, or seeks clarification
+8. Use a ${tone} tone
+9. DO NOT include the word "suggestion" or any explanation in your response
+10. ONLY output the 3 suggestions separated by "---"
+
+Example:
+If last message is: "Спасибо" (Thank you)
+Good replies: "Не за что" / "Пожалуйста" / "Рад был помочь"
+Bad: "за понимание" (this is a continuation, not a reply)
+
+Format: [first suggestion]---[second suggestion]---[third suggestion]`
 
     let suggestions
     switch (provider.toLowerCase()) {
@@ -492,10 +503,36 @@ async function callGoogle(context, systemPrompt, apiKey) {
 async function callLocalLLM(context, systemPrompt) {
   try {
     // Convert context from {text, role} to {content, role} format expected by Ollama
-    const formattedContext = context.map(msg => ({
+    // Only use the last 3 messages to avoid confusing the model
+    const recentMessages = context.slice(-3)
+    
+    console.log('📝 Context messages:', recentMessages)
+    
+    // If there are no messages, return empty suggestions
+    if (recentMessages.length === 0) {
+      return { success: true, data: 'No conversation to reply to.' }
+    }
+    
+    const formattedContext = recentMessages.map(msg => ({
       role: msg.role,
       content: msg.text || msg.content
     }))
+    
+    console.log('📝 Using last 3 messages from context:', formattedContext)
+    
+    // Build conversation string for the system prompt
+    const conversationText = formattedContext.map((msg, idx) => {
+      const role = msg.role === 'user' ? 'User' : 'Assistant'
+      return `${idx + 1}. ${role}: ${msg.content}`
+    }).join('\n')
+    
+    // Add conversation context to the prompt
+    const enhancedPrompt = `${systemPrompt}
+
+CONVERSATION HISTORY:
+${conversationText}
+
+Your task: Generate reply suggestions for the LAST message in the conversation above.`
     
     const messages = [
       { role: 'system', content: systemPrompt },
