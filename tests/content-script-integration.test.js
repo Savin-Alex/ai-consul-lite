@@ -98,17 +98,18 @@ describe('Content Script Integration', () => {
 
     it('should extract WhatsApp message text correctly', () => {
       const messageElement = document.createElement('div')
-      messageElement.className = 'x1c4vz4f'
+      messageElement.className = 'message-in'
       messageElement.innerHTML = `
-        <div data-testid="msg-container">
+        <span class="copyable-text">
           <span dir="ltr">Hello, how are you?</span>
-        </div>
+        </span>
       `
       
       document.body.appendChild(messageElement)
       
-      // Test message extraction
-      const textElement = messageElement.querySelector('[data-testid="msg-container"] span[dir="ltr"]')
+      // Test message extraction using platform adapter logic
+      const textElement = messageElement.querySelector('.copyable-text > span') ||
+                         messageElement.querySelector('span[dir="ltr"]')
       const text = textElement ? textElement.textContent.trim() : ''
       
       expect(text).toBe('Hello, how are you?')
@@ -117,24 +118,18 @@ describe('Content Script Integration', () => {
     it('should determine WhatsApp message role correctly', () => {
       // Outgoing message
       const outgoingMessage = document.createElement('div')
-      outgoingMessage.innerHTML = `
-        <div data-testid="msg-container-outgoing">
-          <span>Outgoing message</span>
-        </div>
-      `
+      outgoingMessage.className = 'message-out'
+      outgoingMessage.innerHTML = '<span>Outgoing message</span>'
       
       // Incoming message
       const incomingMessage = document.createElement('div')
-      incomingMessage.innerHTML = `
-        <div data-testid="msg-container">
-          <span>Incoming message</span>
-        </div>
-      `
+      incomingMessage.className = 'message-in'
+      incomingMessage.innerHTML = '<span>Incoming message</span>'
       
       // Test role determination
-      const outgoingRole = outgoingMessage.querySelector('[data-testid="msg-container-outgoing"]') ? 'user' : 'assistant'
-      const incomingRole = incomingMessage.querySelector('[data-testid="msg-container"]') && 
-                          !incomingMessage.querySelector('[data-testid="msg-container-outgoing"]') ? 'assistant' : 'user'
+      const outgoingRole = outgoingMessage.classList.contains('message-out') ? 'user' : 'assistant'
+      const incomingRole = incomingMessage.classList.contains('message-in') && 
+                          !incomingMessage.classList.contains('message-out') ? 'assistant' : 'user'
       
       expect(outgoingRole).toBe('user')
       expect(incomingRole).toBe('assistant')

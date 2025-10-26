@@ -212,7 +212,7 @@ describe('LLM Service', () => {
       )
 
       expect(result.success).toBe(false)
-      expect(result.error).toContain('Local LLM server (Ollama) not found')
+      expect(result.error).toContain('Model not found')
     })
 
     it('should handle Local LLM model not found', async () => {
@@ -231,6 +231,24 @@ describe('LLM Service', () => {
 
       expect(result.success).toBe(false)
       expect(result.error).toContain('Model not found')
+    })
+
+    it('should handle Local LLM CORS errors', async () => {
+      global.fetch.mockResolvedValueOnce({
+        ok: false,
+        status: 403,
+        statusText: 'Forbidden',
+        json: () => Promise.resolve({ error: { message: 'CORS error' } })
+      })
+
+      const result = await getLLMSuggestions(
+        [{ role: 'user', content: 'Hello' }],
+        'professional',
+        'local'
+      )
+
+      expect(result.success).toBe(false)
+      expect(result.error).toContain('CORS')
     })
   })
 

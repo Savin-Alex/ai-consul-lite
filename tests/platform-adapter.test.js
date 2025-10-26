@@ -72,16 +72,15 @@ describe('Platform Adapter', () => {
     })
 
     it('should have correct selectors', () => {
-      expect(adapter.inputSelector).toBe('div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])')
-      expect(adapter.messageSelector).toBe('div[class*="x1c4vz4f"]')
+      expect(adapter.inputSelector).toBe('div[data-testid="conversation-compose-box-input"], div[contenteditable="true"][role="textbox"]:not([aria-label*="Search"]):not([aria-label*="search"])')
+      expect(adapter.messageSelector).toBe('div.message-in, div.message-out')
     })
 
     it('should extract message text correctly', () => {
       const mockElement = document.createElement('div')
+      mockElement.className = 'message-in'
       mockElement.innerHTML = `
-        <div data-testid="msg-container">
-          <span dir="ltr">Hello world</span>
-        </div>
+        <span class="copyable-text"><span dir="ltr">Hello world</span></span>
       `
       
       const text = adapter.getMessageText(mockElement)
@@ -90,18 +89,12 @@ describe('Platform Adapter', () => {
 
     it('should determine message role correctly', () => {
       const outgoingElement = document.createElement('div')
-      outgoingElement.innerHTML = `
-        <div data-testid="msg-out">
-          <span>Outgoing message</span>
-        </div>
-      `
+      outgoingElement.className = 'message-out'
+      outgoingElement.innerHTML = '<span>Outgoing message</span>'
       
       const incomingElement = document.createElement('div')
-      incomingElement.innerHTML = `
-        <div data-testid="msg-container">
-          <span>Incoming message</span>
-        </div>
-      `
+      incomingElement.className = 'message-in'
+      incomingElement.innerHTML = '<span>Incoming message</span>'
       
       expect(adapter.getMessageRole(outgoingElement)).toBe('user')
       expect(adapter.getMessageRole(incomingElement)).toBe('assistant')
@@ -224,12 +217,12 @@ describe('Platform Adapter', () => {
     it('should return recent messages from WhatsApp', () => {
       // Create mock message elements
       const message1 = document.createElement('div')
-      message1.className = 'x1c4vz4f'
-      message1.innerHTML = '<div data-testid="msg-container"><span dir="ltr">First message</span></div>'
+      message1.className = 'message-in'
+      message1.innerHTML = '<span class="copyable-text"><span dir="ltr">First message</span></span>'
       
       const message2 = document.createElement('div')
-      message2.className = 'x1c4vz4f'
-      message2.innerHTML = '<div data-testid="msg-out"><span dir="ltr">Second message</span></div>'
+      message2.className = 'message-out'
+      message2.innerHTML = '<span class="copyable-text"><span dir="ltr">Second message</span></span>'
       
       document.body.appendChild(message1)
       document.body.appendChild(message2)
@@ -248,8 +241,8 @@ describe('Platform Adapter', () => {
       // Create multiple message elements
       for (let i = 0; i < 5; i++) {
         const message = document.createElement('div')
-        message.className = 'x1c4vz4f'
-        message.innerHTML = `<div data-testid="msg-container"><span dir="ltr">Message ${i}</span></div>`
+        message.className = 'message-in'
+        message.innerHTML = `<span class="copyable-text"><span dir="ltr">Message ${i}</span></span>`
         document.body.appendChild(message)
       }
       
