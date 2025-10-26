@@ -112,27 +112,14 @@ chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
   if (msg.type === 'GET_SUGGESTIONS') {
     console.log('🔄 Processing GET_SUGGESTIONS request:', msg)
     console.log('📝 Message content:', JSON.stringify(msg, null, 2))
-    // Handle LLM suggestion requests from content scripts
-    try {
-      await handleGetSuggestions(msg, sendResponse)
-      console.log('✅ handleGetSuggestions completed successfully')
-    } catch (error) {
-      console.error('❌ Error in handleGetSuggestions:', error)
-      console.error('❌ Error stack:', error.stack)
-      // Ensure we always send a response
-      try {
-        sendResponse({
-          type: 'SUGGESTIONS_READY',
-          success: false,
-          suggestions: ['Error generating suggestions. Please try again.'],
-          error: error.message
-        })
-        console.log('✅ Fallback error response sent')
-      } catch (sendError) {
-        console.error('❌ Failed to send error response:', sendError)
-      }
-    }
-    return true // Indicate async response
+    
+    // Handle LLM suggestion requests from content scripts asynchronously
+    handleGetSuggestions(msg, sendResponse).catch(error => {
+      console.error('❌ Unhandled error in handleGetSuggestions:', error)
+    })
+    
+    // Return true to keep the message channel open for async response
+    return true
   }
   
   if (msg.type === 'PING') {
@@ -154,12 +141,14 @@ chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
     // Audio capture is now active
     chrome.action.setBadgeText({ text: 'ON' })
     chrome.action.setBadgeBackgroundColor({ color: '#4688F1' })
+    return false
   }
   
   if (msg.type === 'MODEL_LOADING') {
     // Model is loading
     chrome.action.setBadgeText({ text: '...' })
     chrome.action.setBadgeBackgroundColor({ color: '#FA9B3D' })
+    return false
   }
   
   if (msg.type === 'TRANSCRIPT_READY') {
@@ -173,6 +162,7 @@ chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
     } catch (error) {
       console.error('Failed to save transcript:', error)
     }
+    return false
   }
   
   if (msg.type === 'CAPTURE_ERROR') {
@@ -181,13 +171,18 @@ chrome.runtime.onMessage.addListener(async (msg, sender, sendResponse) => {
     chrome.action.setBadgeBackgroundColor({ color: '#ef4444' })
     // Clean up state
     stopCapture()
+    return false
   }
+  
+  // If we reach here, it's an unhandled message type
+  return false
 })
 
 /**
  * Handle LLM suggestion requests
  */
 async function handleGetSuggestions(msg, sendResponse) {
+  // This function is called asynchronously, so we need to track if response was sent
   let responseSent = false
   
   // Set a timeout to ensure we always respond
@@ -195,12 +190,16 @@ async function handleGetSuggestions(msg, sendResponse) {
     if (!responseSent) {
       console.log('⏰ Timeout reached, sending fallback response')
       responseSent = true
-      sendResponse({
-        type: 'SUGGESTIONS_READY',
-        success: false,
-        suggestions: ['Request timed out. Please try again.'],
-        error: 'Request timeout'
-      })
+      try {
+        sendResponse({
+          type: 'SUGGESTIONS_READY',
+          success: false,
+          suggestions: ['Request timed out. Please try again.'],
+          error: 'Request timeout'
+        })
+      } catch (e) {
+        console.error('Failed to send timeout response:', e)
+      }
     }
   }, 10000) // 10 second timeout
   
@@ -216,10 +215,10 @@ async function handleGetSuggestions(msg, sendResponse) {
     
     if (!responseSent) {
       const response = {
-      type: 'SUGGESTIONS_READY',
-      success: result.success,
-      suggestions: result.suggestions,
-      error: result.error
+        type: 'SUGGESTIONS_READY',
+        success: result.success,
+        suggestions: result.suggestions,
+        error: result.error
       }
       console.log('📤 Sending response:', response)
       console.log('📤 Response type:', typeof response)
@@ -234,10 +233,10 @@ async function handleGetSuggestions(msg, sendResponse) {
     
     if (!responseSent) {
       const errorResponse = {
-      type: 'SUGGESTIONS_READY',
-      success: false,
+        type: 'SUGGESTIONS_READY',
+        success: false,
         suggestions: ['Error generating suggestions. Please try again.'],
-      error: error.message
+        error: error.message
       }
       console.log('📤 Sending error response:', errorResponse)
       responseSent = true
@@ -262,7 +261,7 @@ async function getLLMSuggestions(context, tone, provider) {
       }
     }
 
-    const systemPrompt = `You are a helpful assistant. Provide 2-3 short reply suggestions to the last message in a ${tone} tone. Each suggestion should be concise (1-2 sentences max) and contextually appropriate. Separate each suggestion with '---'.`
+    const systemPrompt = `You are a helpful assistant that generates short, conversational reply suggestions. Based on the conversation context, provide exactly 2-3 brief reply options (one per line, separated by '---') that are: 1) contextually appropriate, 2) in a ${tone} tone, and 3) concise (1-2 sentences max).`
 
     let suggestions
     switch (provider.toLowerCase()) {
@@ -480,18 +479,24 @@ async function callGoogle(context, systemPrompt, apiKey) {
 
 async function callLocalLLM(context, systemPrompt) {
   try {
+    // Convert context from {text, role} to {content, role} format expected by Ollama
+    const formattedContext = context.map(msg => ({
+      role: msg.role,
+      content: msg.text || msg.content
+    }))
+    
     const messages = [
       { role: 'system', content: systemPrompt },
-      ...context
+      ...formattedContext
     ]
 
     console.log('🌐 Making request to Ollama API...')
     console.log('📝 Request payload:', JSON.stringify({
-      model: 'llama3:latest',
-      messages: messages,
-      max_tokens: 300,
-      temperature: 0.7,
-      stream: false
+        model: 'llama3:latest',
+        messages: messages,
+        max_tokens: 300,
+        temperature: 0.9,
+        stream: false
     }, null, 2))
     
     const response = await fetch('http://localhost:11434/v1/chat/completions', {
@@ -505,7 +510,7 @@ async function callLocalLLM(context, systemPrompt) {
         model: 'llama3:latest', // Use llama3:latest instead of llama3:8b
         messages: messages,
         max_tokens: 300,
-        temperature: 0.7,
+        temperature: 0.9,
         stream: false // Ensure streaming is off
       })
     })
@@ -531,12 +536,16 @@ async function callLocalLLM(context, systemPrompt) {
     }
 
     const data = await response.json()
+    console.log('📦 Ollama response data:', JSON.stringify(data, null, 2))
+    
     const content = data.choices?.[0]?.message?.content
 
-    if (!content) {
-      return { success: false, error: 'No response content received from Local LLM' }
+    if (!content || content.trim().length === 0) {
+      console.log('❌ No content found in response. Full response:', data)
+      return { success: false, error: 'Model returned empty response. Try regenerating or use a different tone.' }
     }
 
+    console.log('✅ Content extracted:', content)
     return { success: true, data: content }
   } catch (error) {
     // This catch block will trigger if the server isn't running at all
