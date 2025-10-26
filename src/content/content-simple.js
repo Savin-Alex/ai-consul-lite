@@ -42,30 +42,28 @@ function getAdapter(hostname) {
       },
       insertText: (inputField, text) => {
         try {
+          console.log('📝 WhatsApp insertText called with:', text)
+          console.log('📝 Input field element:', inputField)
+          
+          // Focus the input
           inputField.focus()
+          
+          // Clear any existing content
           inputField.innerHTML = ''
           
-          const paragraph = document.createElement('p')
-          paragraph.className = 'selectable-text copyable-text x15bjb6t x1n2onr6'
-          paragraph.setAttribute('dir', 'ltr')
-          paragraph.style.cssText = 'text-indent: 0px; margin-top: 0px; margin-bottom: 0px;'
+          // Insert the text
+          inputField.textContent = text
           
-          const span = document.createElement('span')
-          span.className = 'selectable-text copyable-text xkrh14z'
-          span.setAttribute('data-lexical-text', 'true')
-          span.textContent = text
-          
-          paragraph.appendChild(span)
-          inputField.appendChild(paragraph)
-          
+          // Dispatch input events to trigger WhatsApp's state update
+          inputField.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+          inputField.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
           inputField.dispatchEvent(new Event('input', { bubbles: true }))
           inputField.dispatchEvent(new Event('change', { bubbles: true }))
-          inputField.dispatchEvent(new Event('keyup', { bubbles: true }))
-          inputField.dispatchEvent(new Event('keydown', { bubbles: true }))
           
+          console.log('✅ Text inserted successfully')
           return true
         } catch (error) {
-          console.error('Error inserting text:', error)
+          console.error('❌ Error inserting text:', error)
           return false
         }
       }
@@ -407,8 +405,16 @@ function monitorForChatInterface() {
         const isChatInput = validateChatInput(inputField)
         console.log('🎯 Is valid chat input?', isChatInput)
         
-        if (isChatInput && !aiIcon) {
+        // Check if aiIcon exists AND is still in the DOM
+        const iconStillExists = aiIcon && document.contains(aiIcon)
+        console.log('🔍 Icon still exists in DOM?', iconStillExists)
+        
+        if (isChatInput && (!aiIcon || !iconStillExists)) {
           console.log('🚀 Injecting AI icon...')
+          // If the old icon was detached, reset the reference
+          if (!iconStillExists) {
+            aiIcon = null
+          }
           injectAIIcon(inputField)
         } else if (!isChatInput) {
           console.log('❌ Input field found but not a valid chat input (likely search field)')
