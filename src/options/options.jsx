@@ -22,11 +22,17 @@ function OptionsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [hasApiKey, setHasApiKey] = useState(false)
   const [isTestingConnection, setIsTestingConnection] = useState(false)
+  const [availableModels, setAvailableModels] = useState([])
+  const [isLoadingModels, setIsLoadingModels] = useState(false)
 
   // Load settings on mount
   useEffect(() => {
     loadSettings()
-  }, [])
+    // Load models if Local provider is selected
+    if (settings.provider === 'local') {
+      loadAvailableModels()
+    }
+  }, [settings.provider])
 
   const loadSettings = async () => {
     try {
@@ -59,11 +65,39 @@ function OptionsPage() {
     }
   }
 
+  const loadAvailableModels = async () => {
+    setIsLoadingModels(true)
+    try {
+      const response = await fetch('http://localhost:11434/api/tags', {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        mode: 'cors'
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        const models = data.models?.map(model => model.name) || []
+        setAvailableModels(models.sort())
+      } else {
+        console.log('Could not load models:', response.status)
+      }
+    } catch (error) {
+      console.log('Could not load models from Ollama:', error.message)
+    } finally {
+      setIsLoadingModels(false)
+    }
+  }
+
   const handleInputChange = (field, value) => {
     setSettings(prev => ({
       ...prev,
       [field]: value
     }))
+    
+    // Load models when switching to local provider
+    if (field === 'provider' && value === 'local') {
+      loadAvailableModels()
+    }
   }
 
   const handleSave = async () => {
@@ -270,17 +304,45 @@ function OptionsPage() {
               </div>
             </div>
             <div className="form-group">
-              <label htmlFor="default-local-model">Default Local Model Name</label>
-              <input
-                type="text"
-                id="default-local-model"
-                placeholder="e.g., llama3:latest, llama3.1:8b, phi3:mini"
-                value={settings.defaultLocalModel}
-                onChange={(e) => handleInputChange('defaultLocalModel', e.target.value)}
-                disabled={isLoading}
-              />
+              <label htmlFor="default-local-model">Default Local Model</label>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <select
+                  id="default-local-model"
+                  value={settings.defaultLocalModel}
+                  onChange={(e) => handleInputChange('defaultLocalModel', e.target.value)}
+                  disabled={isLoading || isLoadingModels}
+                  style={{ flex: 1, padding: '8px 12px', border: '1px solid #ddd', borderRadius: '6px', fontSize: '14px' }}
+                >
+                  <option value="">Select a model...</option>
+                  {availableModels.length > 0 ? (
+                    availableModels.map(model => (
+                      <option key={model} value={model}>{model}</option>
+                    ))
+                  ) : (
+                    <option value="">No models found. Load models first.</option>
+                  )}
+                </select>
+                <button
+                  onClick={loadAvailableModels}
+                  disabled={isLoadingModels}
+                  style={{
+                    padding: '8px 16px',
+                    background: '#4688F1',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    fontSize: '14px'
+                  }}
+                  title="Load models from Ollama"
+                >
+                  {isLoadingModels ? 'Loading...' : 'Refresh'}
+                </button>
+              </div>
               <small className="help-text">
-                This model will be used for Local (Ollama) by default. You can override it in the sidebar.
+                {availableModels.length > 0 
+                  ? `Found ${availableModels.length} model(s). Select one from the dropdown.`
+                  : 'Click "Refresh" to load available models from your Ollama server.'}
               </small>
             </div>
             <button 
