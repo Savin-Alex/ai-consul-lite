@@ -108,6 +108,27 @@
   cursor: not-allowed;
 }
 
+.streaming-progress {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.streaming-text {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
 .error-message {
   padding: 12px;
   background: #fee;

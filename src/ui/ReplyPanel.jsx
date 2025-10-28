@@ -99,11 +99,17 @@ function ReplyPanel({ onGenerate, onClose, onInsert }) {
 
         <button 
           className="generate-button" 
-          onClick={handleGenerate}
+          onClick={handleGenerateStream}
           disabled={isLoading}
         >
           {isLoading ? 'Generating...' : 'Generate Suggestions'}
         </button>
+
+        {streamingProgress && (
+          <div className="streaming-progress">
+            <div className="streaming-text">{streamingProgress}</div>
+          </div>
+        )}
 
         {error && (
           <div className="error-message">

@@ -14,6 +14,7 @@ function OptionsPage() {
     provider: 'openai',
     apiKey: '',
     defaultTone: 'semi-formal',
+    defaultLocalModel: 'llama3:latest',
     voiceEnabled: true,
     extensionEnabled: true
   })
@@ -32,6 +33,7 @@ function OptionsPage() {
       const result = await chrome.storage.sync.get([
         'defaultProvider',
         'defaultTone',
+        'defaultLocalModel',
         'voiceEnabled',
         'extensionEnabled'
       ])
@@ -45,6 +47,7 @@ function OptionsPage() {
         ...prev,
         provider: provider,
         defaultTone: result.defaultTone || 'semi-formal',
+        defaultLocalModel: result.defaultLocalModel || 'llama3:latest',
         voiceEnabled: result.voiceEnabled !== false,
         extensionEnabled: result.extensionEnabled !== false
       }))
@@ -77,6 +80,7 @@ function OptionsPage() {
       await chrome.storage.sync.set({
         defaultProvider: settings.provider,
         defaultTone: settings.defaultTone,
+        defaultLocalModel: settings.defaultLocalModel || 'llama3:latest',
         voiceEnabled: settings.voiceEnabled,
         extensionEnabled: settings.extensionEnabled
       })
@@ -127,6 +131,9 @@ function OptionsPage() {
 
   const testLocalConnection = async () => {
     try {
+      // Resolve the model to test with
+      const syncVals = await chrome.storage.sync.get(['defaultLocalModel'])
+      const modelToTest = settings.defaultLocalModel || syncVals.defaultLocalModel || 'llama3:latest'
       // First, try to check if Ollama is running with a simple API call
       const healthResponse = await fetch('http://localhost:11434/api/tags', {
         method: 'GET',
@@ -151,7 +158,7 @@ function OptionsPage() {
         },
         mode: 'cors', // Explicitly set CORS mode
         body: JSON.stringify({
-          model: 'llama3:latest', // Use the available model from the API response
+          model: modelToTest,
           messages: [
             { role: 'user', content: 'Hello, this is a test message.' }
           ],
@@ -165,7 +172,7 @@ function OptionsPage() {
           return { success: false, error: 'Ollama blocked the request due to CORS. Try: OLLAMA_ORIGINS="*" ollama serve' }
         }
         if (response.status === 404) {
-          return { success: false, error: 'Model not found. Available models: llama3:latest, llama3.1:8b' }
+          return { success: false, error: `Model not found. Check the model name: ${modelToTest}` }
         }
         const errorData = await response.json().catch(() => ({}))
         return { success: false, error: `Ollama server error: ${errorData.error?.message || response.statusText}` }
@@ -261,6 +268,20 @@ function OptionsPage() {
                   <li>Test the connection below</li>
                 </ol>
               </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="default-local-model">Default Local Model Name</label>
+              <input
+                type="text"
+                id="default-local-model"
+                placeholder="e.g., llama3:latest, llama3.1:8b, phi3:mini"
+                value={settings.defaultLocalModel}
+                onChange={(e) => handleInputChange('defaultLocalModel', e.target.value)}
+                disabled={isLoading}
+              />
+              <small className="help-text">
+                This model will be used for Local (Ollama) by default. You can override it in the sidebar.
+              </small>
             </div>
             <button 
               id="test-local-button" 

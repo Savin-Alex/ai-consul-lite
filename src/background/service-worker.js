@@ -534,6 +534,16 @@ ${conversationText}
 
 Your task: Generate reply suggestions for the LAST message in the conversation above.`
     
+    // Resolve model preference: session override -> default -> fallback
+    let modelName = 'llama3:latest'
+    try {
+      const { defaultLocalModel } = await chrome.storage.sync.get(['defaultLocalModel'])
+      const localStore = await chrome.storage.local.get(['sessionLocalModel'])
+      modelName = localStore.sessionLocalModel || defaultLocalModel || modelName
+    } catch (e) {
+      // ignore storage errors
+    }
+
     const messages = [
       { role: 'system', content: systemPrompt },
       ...formattedContext
@@ -541,7 +551,7 @@ Your task: Generate reply suggestions for the LAST message in the conversation a
 
     console.log('🌐 Making request to Ollama API...')
     console.log('📝 Request payload:', JSON.stringify({
-        model: 'llama3:latest',
+        model: modelName,
         messages: messages,
         max_tokens: 500,
         temperature: 0.9,
@@ -556,7 +566,7 @@ Your task: Generate reply suggestions for the LAST message in the conversation a
       },
       mode: 'cors', // Explicitly set CORS mode
       body: JSON.stringify({
-        model: 'llama3:latest', // Use llama3:latest instead of llama3:8b
+        model: modelName,
         messages: messages,
         max_tokens: 500,
         temperature: 0.9,
@@ -574,9 +584,9 @@ Your task: Generate reply suggestions for the LAST message in the conversation a
       if (response.status === 403) {
         errorMessage = 'Ollama blocked the request due to CORS. Try: OLLAMA_ORIGINS="*" ollama serve'
       } else if (response.status === 404) {
-        errorMessage = 'Model not found. Try running: ollama pull llama3:latest'
+        errorMessage = `Model not found. Check the model name: ${modelName}`
       } else if (response.status === 400) {
-        errorMessage = 'Model not found. Try running: ollama pull llama3:latest'
+        errorMessage = `Model not found. Check the model name: ${modelName}`
       } else if (errorData.error?.message) {
         errorMessage = errorData.error.message
       }
