@@ -3,6 +3,8 @@
  * Orchestrates tab capture, message routing, and state management
  */
 
+import { streamLLMSuggestions } from '../lib/llm_service.js'
+
 // Ensure service worker stays active
 console.log('🚀 Service Worker starting...')
 
@@ -638,5 +640,72 @@ chrome.runtime.onInstalled.addListener((details) => {
     console.log('AI Consul Lite installed')
   } else if (details.reason === 'update') {
     console.log('AI Consul Lite updated')
+  }
+})
+
+/**
+ * Handle streaming connections for LLM suggestions
+ * Content scripts connect to this port when they want streaming responses
+ */
+chrome.runtime.onConnect.addListener((port) => {
+  console.log('🔌 Port connected:', port.name)
+  
+  if (port.name === 'STREAM_SUGGESTIONS') {
+    let accumulatedText = ''
+    
+    port.onMessage.addListener(async (msg) => {
+      if (msg.type === 'START_STREAM') {
+        console.log('📡 Starting streaming request:', msg)
+        const { context, tone, provider } = msg
+        
+        try {
+          // Send chunks as they arrive
+          const result = await streamLLMSuggestions(
+            context,
+            tone,
+            provider,
+            (chunk) => {
+              accumulatedText += chunk
+              port.postMessage({
+                type: 'CHUNK',
+                chunk: chunk,
+                accumulated: accumulatedText
+              })
+            }
+          )
+          
+          if (result.success) {
+            // Parse accumulated text into suggestions
+            const parsedSuggestions = accumulatedText
+              .split('---')
+              .map(s => s.trim())
+              .filter(s => s.length > 0)
+              .slice(0, 3)
+            
+            port.postMessage({
+              type: 'COMPLETE',
+              success: true,
+              suggestions: parsedSuggestions
+            })
+          } else {
+            port.postMessage({
+              type: 'ERROR',
+              error: result.error || 'Streaming failed'
+            })
+          }
+        } catch (error) {
+          console.error('❌ Streaming error:', error)
+          port.postMessage({
+            type: 'ERROR',
+            error: error.message || 'Unknown streaming error'
+          })
+        }
+      }
+    })
+    
+    port.onDisconnect.addListener(() => {
+      console.log('🔌 Port disconnected')
+      accumulatedText = ''
+    })
   }
 })

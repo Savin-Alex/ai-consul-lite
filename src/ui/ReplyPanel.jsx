@@ -8,10 +8,12 @@ import React, { useState, useEffect } from 'react'
 /**
  * Reply Panel component
  */
-function ReplyPanel({ onGenerate, onClose, onInsert }) {
+function ReplyPanel({ onGenerate, onGenerateStreaming, onClose, onInsert }) {
   const [selectedTone, setSelectedTone] = useState('semi-formal')
   const [suggestions, setSuggestions] = useState([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isStreaming, setIsStreaming] = useState(false)
+  const [streamingProgress, setStreamingProgress] = useState('')
   const [error, setError] = useState('')
 
   // Load default tone from storage on mount
@@ -45,17 +47,55 @@ function ReplyPanel({ onGenerate, onClose, onInsert }) {
   }
 
   const handleGenerate = async () => {
-    setIsLoading(true)
+    // Try streaming first if available, fallback to regular generation
+    if (onGenerateStreaming) {
+      handleGenerateStream()
+    } else if (onGenerate) {
+      setIsLoading(true)
+      setError('')
+      setSuggestions([])
+      setStreamingProgress('')
+
+      try {
+        const newSuggestions = await onGenerate(selectedTone)
+        setSuggestions(newSuggestions || [])
+      } catch (error) {
+        setError(error.message || 'Failed to generate suggestions')
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  }
+
+  const handleGenerateStream = async () => {
+    if (!onGenerateStreaming) return
+    
+    setIsStreaming(true)
+    setIsLoading(false)
     setError('')
     setSuggestions([])
+    setStreamingProgress('')
 
     try {
-      const newSuggestions = await onGenerate(selectedTone)
-      setSuggestions(newSuggestions || [])
+      await onGenerateStreaming(selectedTone, {
+        onChunk: (chunk, accumulated) => {
+          setStreamingProgress(accumulated)
+        },
+        onComplete: (finalSuggestions) => {
+          setSuggestions(finalSuggestions || [])
+          setStreamingProgress('')
+          setIsStreaming(false)
+        },
+        onError: (errorMessage) => {
+          setError(errorMessage || 'Failed to generate suggestions')
+          setStreamingProgress('')
+          setIsStreaming(false)
+        }
+      })
     } catch (error) {
-      setError(error.message || 'Failed to generate suggestions')
-    } finally {
-      setIsLoading(false)
+      setError(error.message || 'Failed to start streaming')
+      setIsStreaming(false)
+      setStreamingProgress('')
     }
   }
 
@@ -99,13 +139,13 @@ function ReplyPanel({ onGenerate, onClose, onInsert }) {
 
         <button 
           className="generate-button" 
-          onClick={handleGenerateStream}
-          disabled={isLoading}
+          onClick={handleGenerate}
+          disabled={isLoading || isStreaming}
         >
-          {isLoading ? 'Generating...' : 'Generate Suggestions'}
+          {isStreaming ? 'Streaming...' : isLoading ? 'Generating...' : 'Generate Suggestions'}
         </button>
 
-        {streamingProgress && (
+        {isStreaming && streamingProgress && (
           <div className="streaming-progress">
             <div className="streaming-text">{streamingProgress}</div>
           </div>

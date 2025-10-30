@@ -1,9 +1,11 @@
 /**
  * LLM Service for AI Consul Lite
  * Handles direct API calls to OpenAI, Anthropic, and Google Gemini
+ * Includes streaming support for all providers
  */
 
 import { getKey, saveKey } from './storage.js'
+import { streamOpenAI, streamAnthropic, streamGoogle, streamLocalLLM } from './streaming.js'
 
 /**
  * Get AI reply suggestions from the specified LLM provider
@@ -347,6 +349,90 @@ export async function testApiKey(provider, apiKeyToTest) {
     return { success: result.success, error: result.error }
   } catch (error) {
     return { success: false, error: `Test failed: ${error.message}` }
+  }
+}
+
+/**
+ * Stream AI reply suggestions from the specified LLM provider
+ * @param {Array} context - Array of message objects with role and content
+ * @param {string} tone - Tone for the response (formal, semi-formal, friendly, slang)
+ * @param {string} provider - LLM provider (openai, anthropic, google, local)
+ * @param {Function} onChunk - Callback function that receives incremental text chunks
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+export async function streamLLMSuggestions(context, tone, provider, onChunk) {
+  try {
+    let apiKey // Will be undefined for 'local'
+
+    // Only get API key if it's not a local provider
+    if (provider !== 'local') {
+      apiKey = await getKey(provider)
+      if (!apiKey) {
+        return { success: false, error: 'API key not found. Please configure your API key in the options page.' }
+      }
+    }
+
+    // Use the same enhanced system prompt as non-streaming version
+    const systemPrompt = `You are a helpful assistant that generates reply suggestions for chat conversations. 
+
+IMPORTANT: The last message in the conversation is what you need to reply to. Generate REPLY suggestions, NOT continuations.
+
+CRITICAL RULES:
+1. ALWAYS respond in the EXACT SAME language as the last message
+2. Generate exactly 3 diverse REPLY suggestions (not continuations of your own message)
+3. Each suggestion must be 1-2 sentences long
+4. Separate each suggestion with exactly "---" (three dashes)
+5. Provide one suggestion that agrees/confirms with the last message
+6. Provide one suggestion that disagrees or offers an alternative perspective
+7. Provide one suggestion that is neutral, asks a question, or seeks clarification
+8. Use a ${tone} tone
+9. DO NOT include the word "suggestion" or any explanation in your response
+10. ONLY output the 3 suggestions separated by "---"
+
+Example:
+If last message is: "Спасибо" (Thank you)
+Good replies: "Не за что" / "Пожалуйста" / "Рад был помочь"
+Bad: "за понимание" (this is a continuation, not a reply)
+
+Format: [first suggestion]---[second suggestion]---[third suggestion]`
+
+    // Format context to match streaming API expectations
+    const formattedContext = context.map(msg => ({
+      role: msg.role,
+      content: msg.text || msg.content
+    }))
+
+    let result
+    switch (provider.toLowerCase()) {
+      case 'openai':
+        result = await streamOpenAI(formattedContext, systemPrompt, apiKey, onChunk)
+        break
+      case 'anthropic':
+        result = await streamAnthropic(formattedContext, systemPrompt, apiKey, onChunk)
+        break
+      case 'google':
+        result = await streamGoogle(formattedContext, systemPrompt, apiKey, onChunk)
+        break
+      case 'local':
+        // Resolve model name for local provider
+        let modelName = 'llama3:latest'
+        try {
+          const { defaultLocalModel } = await chrome.storage.sync.get(['defaultLocalModel'])
+          const localStore = await chrome.storage.local.get(['sessionLocalModel'])
+          modelName = localStore.sessionLocalModel || defaultLocalModel || modelName
+        } catch (e) {
+          // Ignore storage errors and keep fallback model
+        }
+        result = await streamLocalLLM(formattedContext, systemPrompt, modelName, onChunk)
+        break
+      default:
+        return { success: false, error: `Unsupported provider: ${provider}` }
+    }
+
+    return result
+  } catch (error) {
+    console.error('LLM streaming error:', error)
+    return { success: false, error: `Unexpected error: ${error.message}` }
   }
 }
 

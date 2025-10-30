@@ -220,6 +220,23 @@ function mountReplyPanel(shadowRoot, props) {
         ">Generate Suggestions</button>
       </div>
       
+      <!-- Streaming progress display -->
+      <div id="streaming-progress" style="
+        margin-bottom: 12px;
+        padding: 12px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+        display: none;
+      ">
+        <div id="streaming-text" style="
+          font-size: 13px;
+          color: #666;
+          line-height: 1.5;
+          white-space: pre-wrap;
+        "></div>
+      </div>
+      
       <div id="suggestions" style="
         max-height: 200px;
         overflow-y: auto;
@@ -239,6 +256,8 @@ function mountReplyPanel(shadowRoot, props) {
   const closeBtn = shadowRoot.getElementById('close-btn')
   const generateBtn = shadowRoot.getElementById('generate-btn')
   const suggestionsDiv = shadowRoot.getElementById('suggestions')
+  const streamingProgress = shadowRoot.getElementById('streaming-progress')
+  const streamingText = shadowRoot.getElementById('streaming-text')
   const transcriptSection = shadowRoot.getElementById('transcript-section')
   const transcriptText = shadowRoot.getElementById('transcript-text')
   
@@ -260,47 +279,104 @@ function mountReplyPanel(shadowRoot, props) {
   })
   
   generateBtn.addEventListener('click', async () => {
-    generateBtn.textContent = 'Generating...'
-    generateBtn.disabled = true
+    const toneSelect = shadowRoot.getElementById('tone-select')
+    const selectedTone = toneSelect?.value || 'professional'
     
+    // Try streaming first, fallback to regular generation
     try {
-      const suggestions = await onGenerate()
-      suggestionsDiv.innerHTML = suggestions.map((suggestion, index) => `
-        <div class="suggestion-item" style="
-          margin-bottom: 12px;
-          padding: 12px;
-          background: white;
-          border-radius: 6px;
-          border: 1px solid #e0e0e0;
-          cursor: pointer;
-          transition: all 0.2s;
-        " data-index="${index}">
-          <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #333333;">${suggestion}</p>
-        </div>
-      `).join('')
+      await handleGenerateSuggestionsStreaming(
+        selectedTone,
+        (chunk, accumulated) => {
+          // Show streaming progress
+          streamingProgress.style.display = 'block'
+          streamingText.textContent = accumulated
+        },
+        (suggestions) => {
+          // Hide streaming progress
+          streamingProgress.style.display = 'none'
+          
+          // Display suggestions
+          suggestionsDiv.innerHTML = suggestions.map((suggestion, index) => `
+            <div class="suggestion-item" style="
+              margin-bottom: 12px;
+              padding: 12px;
+              background: white;
+              border-radius: 6px;
+              border: 1px solid #e0e0e0;
+              cursor: pointer;
+              transition: all 0.2s;
+            " data-index="${index}">
+              <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #333333;">${suggestion}</p>
+            </div>
+          `).join('')
+          
+          // Add click listeners to suggestions
+          suggestionsDiv.querySelectorAll('.suggestion-item').forEach((element, index) => {
+            element.addEventListener('mouseenter', () => {
+              element.style.background = '#f5f5f5'
+              element.style.borderColor = '#007bff'
+            })
+            element.addEventListener('mouseleave', () => {
+              element.style.background = 'white'
+              element.style.borderColor = '#e0e0e0'
+            })
+            element.addEventListener('click', () => {
+              const suggestionText = suggestions[index]
+              onInsert(suggestionText)
+              onClose()
+            })
+          })
+        },
+        (error) => {
+          // Hide streaming progress on error
+          streamingProgress.style.display = 'none'
+          suggestionsDiv.innerHTML = `<p style="color: red; margin: 0;">Error: ${error}</p>`
+        }
+      )
+    } catch (streamingError) {
+      // Fallback to non-streaming generation
+      console.log('🔄 Streaming failed, falling back to regular generation:', streamingError)
+      generateBtn.textContent = 'Generating...'
+      generateBtn.disabled = true
       
-      // Add click listeners to suggestions
-      suggestionsDiv.querySelectorAll('.suggestion-item').forEach((element, index) => {
-        element.addEventListener('mouseenter', () => {
-          element.style.background = '#f5f5f5'
-          element.style.borderColor = '#007bff'
+      try {
+        const suggestions = await onGenerate()
+        suggestionsDiv.innerHTML = suggestions.map((suggestion, index) => `
+          <div class="suggestion-item" style="
+            margin-bottom: 12px;
+            padding: 12px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+            cursor: pointer;
+            transition: all 0.2s;
+          " data-index="${index}">
+            <p style="margin: 0; font-size: 14px; line-height: 1.4; color: #333333;">${suggestion}</p>
+          </div>
+        `).join('')
+        
+        // Add click listeners to suggestions
+        suggestionsDiv.querySelectorAll('.suggestion-item').forEach((element, index) => {
+          element.addEventListener('mouseenter', () => {
+            element.style.background = '#f5f5f5'
+            element.style.borderColor = '#007bff'
+          })
+          element.addEventListener('mouseleave', () => {
+            element.style.background = 'white'
+            element.style.borderColor = '#e0e0e0'
+          })
+          element.addEventListener('click', () => {
+            const suggestionText = suggestions[index]
+            onInsert(suggestionText)
+            onClose()
+          })
         })
-        element.addEventListener('mouseleave', () => {
-          element.style.background = 'white'
-          element.style.borderColor = '#e0e0e0'
-        })
-        element.addEventListener('click', () => {
-          const suggestionText = suggestions[index]
-          onInsert(suggestionText)
-          onClose()
-        })
-      })
-      
-    } catch (error) {
-      suggestionsDiv.innerHTML = `<p style="color: red; margin: 0;">Error: ${error.message}</p>`
-    } finally {
-      generateBtn.textContent = 'Generate Suggestions'
-      generateBtn.disabled = false
+      } catch (error) {
+        suggestionsDiv.innerHTML = `<p style="color: red; margin: 0;">Error: ${error.message}</p>`
+      } finally {
+        generateBtn.textContent = 'Generate Suggestions'
+        generateBtn.disabled = false
+      }
     }
   })
 }
@@ -805,6 +881,64 @@ function toggleReplyPanel() {
       }
     }
   }
+}
+
+/**
+ * Handle streaming suggestion generation via port connection
+ */
+async function handleGenerateSuggestionsStreaming(tone, onChunk, onComplete, onError) {
+  return new Promise((resolve, reject) => {
+    try {
+      // Get recent messages for context
+      const recentMessages = getRecentMessages(currentAdapter, 5)
+      
+      // Get provider from storage
+      chrome.storage.sync.get(['defaultProvider']).then((settings) => {
+        const provider = settings.defaultProvider || 'openai'
+        
+        // Connect to service worker via port
+        const port = chrome.runtime.connect({ name: 'STREAM_SUGGESTIONS' })
+        
+        let accumulatedText = ''
+        
+        port.onMessage.addListener((msg) => {
+          if (msg.type === 'CHUNK') {
+            accumulatedText = msg.accumulated
+            onChunk(msg.chunk, msg.accumulated)
+          } else if (msg.type === 'COMPLETE') {
+            port.disconnect()
+            onComplete(msg.suggestions || [])
+            resolve()
+          } else if (msg.type === 'ERROR') {
+            port.disconnect()
+            onError(msg.error || 'Streaming failed')
+            reject(new Error(msg.error))
+          }
+        })
+        
+        port.onDisconnect.addListener(() => {
+          if (chrome.runtime.lastError) {
+            onError(chrome.runtime.lastError.message || 'Port disconnected')
+            reject(new Error(chrome.runtime.lastError.message))
+          }
+        })
+        
+        // Send start message
+        port.postMessage({
+          type: 'START_STREAM',
+          context: recentMessages,
+          tone: tone,
+          provider: provider
+        })
+      }).catch((error) => {
+        onError(error.message || 'Failed to start streaming')
+        reject(error)
+      })
+    } catch (error) {
+      onError(error.message || 'Failed to start streaming')
+      reject(error)
+    }
+  })
 }
 
 /**
